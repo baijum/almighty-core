@@ -8,6 +8,7 @@ import (
 	"github.com/almighty/almighty-core/app"
 	"github.com/almighty/almighty-core/criteria"
 	"github.com/almighty/almighty-core/workitem"
+	"github.com/baijum/templog"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 )
@@ -15,9 +16,10 @@ import (
 // upload imports the items into database
 func upload(db *gorm.DB, tID int, item TrackerItemContent) error {
 	remoteID := item.ID
+	templog.Println3(remoteID)
 	content := string(item.Content)
 
-	var ti TrackerItem
+	ti := TrackerItem{}
 	if db.Where("remote_item_id = ? AND tracker_id = ?", remoteID, tID).Find(&ti).RecordNotFound() {
 		ti = TrackerItem{
 			Item:         content,
@@ -25,6 +27,7 @@ func upload(db *gorm.DB, tID int, item TrackerItemContent) error {
 			TrackerID:    uint64(tID)}
 		return db.Create(&ti).Error
 	}
+	templog.Println("hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh")
 	ti.Item = content
 	return db.Save(&ti).Error
 }

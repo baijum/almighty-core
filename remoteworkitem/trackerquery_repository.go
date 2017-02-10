@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/almighty/almighty-core/app"
+	"github.com/baijum/templog"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 	"golang.org/x/net/context"
@@ -27,6 +28,7 @@ func updateTrackerQuery(db *gorm.DB, tqID int, lu *time.Time) error {
 	tx := db.First(&tq, tqID)
 	if tx.RecordNotFound() {
 		log.Printf("not found, res=%v", tq)
+		templog.Println("iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii 1")
 		return NotFoundError{entity: "tracker_query", ID: string(tq.ID)}
 	}
 	if tq.LastUpdated == nil {
@@ -37,6 +39,7 @@ func updateTrackerQuery(db *gorm.DB, tqID int, lu *time.Time) error {
 
 	if err := tx.Save(&tq).Error; err != nil {
 		log.Print(err.Error())
+		templog.Println("iiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiiii 2")
 		return InternalError{simpleError{err.Error()}}
 	}
 	return nil

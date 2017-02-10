@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/almighty/almighty-core/models"
+	"github.com/baijum/templog"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 	"github.com/robfig/cron"
@@ -54,21 +55,26 @@ func (s *Scheduler) ScheduleAllQueries() {
 	for _, tq := range trackerQueries {
 		cr.AddFunc(tq.Schedule, func() {
 			tr := lookupProvider(tq, s.db)
+			tid := tq.TrackerID
+			tqid := tq.TrackerQueryID
+			tt := tq.TrackerType
 			for i := range tr.Fetch() {
 				models.Transactional(s.db, func(tx *gorm.DB) error {
 					// Save the remote items in a 'temporary' table.
-					err := upload(tx, tq.TrackerID, i)
+					err := upload(tx, tid, i)
 					if err != nil {
+						templog.Println("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
 						return errors.WithStack(err)
 					}
-					if i.LastUpdated != nil {
-						err = updateTrackerQuery(tx, tq.TrackerQueryID, i.LastUpdated)
-						if err != nil {
-							log.Println("Couldn't update the last updated value", err)
-						}
+					err = updateTrackerQuery(tx, tqid, i.LastUpdated)
+					if err != nil {
+						log.Println("Couldn't update the last updated value", err)
 					}
 					// Convert the remote item into a local work item and persist in the DB.
-					_, err = convert(tx, tq.TrackerID, i, tq.TrackerType)
+					_, err = convert(tx, tid, i, tt)
+					if err != nil {
+						templog.Println("cccccccccccccccccccccccccccccccccccccccccccccc")
+					}
 					return errors.WithStack(err)
 				})
 			}
@@ -99,7 +105,10 @@ func lookupProvider(ts trackerSchedule, db *gorm.DB) TrackerProvider {
 	case ProviderGithub:
 		if tq.LastUpdated != nil {
 			// Use the special date for formatting: https://golang.org/pkg/time/#Time.Format
-			q = ts.Query + " updated:\">=" + tq.LastUpdated.Format("2006-01-02T15:04:05Z") + "\""
+			//q = ts.Query + " updated:\">=" + tq.LastUpdated.Format("2006-01-02T15:04") + "\""
+			q = ts.Query + " updated:\"" + tq.LastUpdated.Format("2006-01-02T15:04") + " .. " + tq.LastUpdated.AddDate(0, 0, 1).Format("2006-01-02T15:04") + "\""
+		} else {
+			templog.Println("jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj")
 		}
 		return &GithubTracker{URL: ts.URL, Query: q}
 	case ProviderJira:
