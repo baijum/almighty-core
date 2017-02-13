@@ -20,7 +20,6 @@ type trackerSchedule struct {
 	TrackerQueryID int
 	Query          string
 	Schedule       string
-	LastUpdated    *time.Time
 }
 
 // Scheduler represents scheduler
@@ -58,6 +57,7 @@ func (s *Scheduler) ScheduleAllQueries() {
 			tid := tq.TrackerID
 			tqid := tq.TrackerQueryID
 			tt := tq.TrackerType
+			beforeLU := tr.LastUpdatedTime()
 			for i := range tr.Fetch() {
 				models.Transactional(s.db, func(tx *gorm.DB) error {
 					// Save the remote items in a 'temporary' table.
@@ -78,6 +78,18 @@ func (s *Scheduler) ScheduleAllQueries() {
 					return errors.WithStack(err)
 				})
 			}
+			if beforeLU == tr.LastUpdatedTime() {
+				models.Transactional(s.db, func(tx *gorm.DB) error {
+					lu := tr.LastUpdatedTime().AddDate(0, 0, 10)
+					err := updateTrackerQuery(tx, tqid, &lu)
+					if err != nil {
+						log.Println("Couldn't update the last updated value", err)
+					}
+					return err
+				})
+
+			}
+
 		})
 	}
 	cr.Start()
@@ -106,10 +118,11 @@ func lookupProvider(ts trackerSchedule, db *gorm.DB) TrackerProvider {
 		if tq.LastUpdated != nil {
 			// Use the special date for formatting: https://golang.org/pkg/time/#Time.Format
 			//q = ts.Query + " updated:\">=" + tq.LastUpdated.Format("2006-01-02T15:04") + "\""
-			q = ts.Query + " updated:\"" + tq.LastUpdated.Format("2006-01-02T15:04") + " .. " + tq.LastUpdated.AddDate(0, 0, 1).Format("2006-01-02T15:04") + "\""
-		} else {
-			templog.Println("jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj")
+			q = ts.Query + " updated:\"" + tq.LastUpdated.Format("2006-01-02T15:04") + " .. " + tq.LastUpdated.AddDate(0, 0, 10).Format("2006-01-02T15:04") + "\""
+			return &GithubTracker{URL: ts.URL, Query: q, LastUpdated: tq.LastUpdated}
 		}
+		templog.Println("jjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjjj")
+
 		return &GithubTracker{URL: ts.URL, Query: q}
 	case ProviderJira:
 		if tq.LastUpdated != nil {
@@ -131,6 +144,7 @@ type TrackerItemContent struct {
 // TrackerProvider represents a remote tracker
 type TrackerProvider interface {
 	Fetch() chan TrackerItemContent // TODO: Change to an interface to enforce the contract
+	LastUpdatedTime() *time.Time
 }
 
 func init() {

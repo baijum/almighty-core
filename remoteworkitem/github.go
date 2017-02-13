@@ -19,8 +19,9 @@ type githubFetcher interface {
 
 // GithubTracker represents the Github tracker provider
 type GithubTracker struct {
-	URL   string
-	Query string
+	URL         string
+	Query       string
+	LastUpdated *time.Time
 }
 
 // GithubIssueFetcher fetch issues from github
@@ -38,6 +39,11 @@ func (f *githubIssueFetcher) rateLimit() {
 		sleep := f.client.Rate().Reset.Unix() - time.Now().Unix()
 		time.Sleep(time.Duration(sleep))
 	}
+}
+
+// LastUpdatedTime return the last updated time
+func (g *GithubTracker) LastUpdatedTime() *time.Time {
+	return g.LastUpdated
 }
 
 // Fetch tracker items from Github
@@ -91,6 +97,7 @@ func (g *GithubTracker) fetch(f githubFetcher) chan TrackerItemContent {
 					templog.Println("eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee 4")
 				}
 				templog.Println2(string(id), lut.Format("2006-01-02T15:04"))
+				g.LastUpdated = &lut
 				item <- TrackerItemContent{ID: string(id), Content: content, LastUpdated: &lut}
 			}
 			if response.NextPage == 0 {
