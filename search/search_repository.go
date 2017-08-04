@@ -265,7 +265,11 @@ func parseMap(queryMap map[string]interface{}, q *Query) {
 			q.Value = &s
 		case bool:
 			s := concreteVal
-			q.Negate = s
+			if key == "negate" {
+				q.Negate = s
+			} else if key == "substring" {
+				q.Substring = s
+			}
 		case map[string]interface{}:
 			q.Name = key
 			if v, ok := concreteVal["$IN"]; ok {
@@ -319,6 +323,8 @@ type Query struct {
 	// check for inequality. When Name is an operator, the Negate field has no
 	// effect.
 	Negate bool
+	// When Substring is true the ILIKE operator will be used instead of equal(=).
+	Substring bool
 	// A Query is expected to have child queries only if the Name field contains
 	// an operator like "$AND", or "$OR". If the Name is not an operator, the
 	// Children slice MUST be empty.
@@ -330,13 +336,15 @@ func isOperator(str string) bool {
 }
 
 var searchKeyMap = map[string]string{
-	"area":         workitem.SystemArea,
+	"area": workitem.SystemArea,
+
 	"iteration":    workitem.SystemIteration,
 	"assignee":     workitem.SystemAssignees,
 	"state":        workitem.SystemState,
 	"type":         "Type",
 	"workitemtype": "Type", // same as 'type' - added for compatibility. (Ref. #1564)
 	"space":        "SpaceID",
+	"area_name":    "area:name",
 }
 
 // returns SQL attibute name in query if found otherwise returns input key as is
@@ -356,17 +364,30 @@ func (q Query) determineLiteralType(key string, val string) criteria.Expression 
 	}
 }
 
+func (q Query) isField(key string) bool {
+	return false
+}
+
+func (q Query) getTableDetails(key string) (table string, column string, exp criteria.Expression) {
+	return "areas", "name", criteria.Literal("system.area")
+}
+
 func (q Query) generateExpression() criteria.Expression {
 	var myexpr []criteria.Expression
 	currentOperator := q.Name
 	if !isOperator(currentOperator) {
-		key := q.getAttributeKey(q.Name)
-		left := criteria.Field(key)
-		right := q.determineLiteralType(key, *q.Value)
-		if q.Negate {
-			myexpr = append(myexpr, criteria.Not(left, right))
+		if q.isField(q.Name) {
+			key := q.getAttributeKey(q.Name)
+			left := criteria.Field(key)
+			right := q.determineLiteralType(key, *q.Value)
+			if q.Negate {
+				myexpr = append(myexpr, criteria.Not(left, right))
+			} else {
+				myexpr = append(myexpr, criteria.Equals(left, right))
+			}
 		} else {
-			myexpr = append(myexpr, criteria.Equals(left, right))
+			table, column, fieldExpression := q.getTableDetails(q.Name)
+			myexpr = append(myexpr, workitem.InTable(table, column, fieldExpression, q.Substring))
 		}
 	}
 	for _, child := range q.Children {
