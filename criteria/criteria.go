@@ -1,5 +1,7 @@
 package criteria
 
+import "github.com/fabric8-services/fabric8-wit/criteria"
+
 // Expression is used to express conditions for selecting an entity
 type Expression interface {
 	// Accept calls the visitor callback of the appropriate type
@@ -33,6 +35,11 @@ type BinaryExpression interface {
 	Expression
 	Left() Expression
 	Right() Expression
+}
+
+// InTableExpression represents expression creates an IN query
+type InTableExpression interface {
+	Expression
 }
 
 // ExpressionVisitor is an implementation of the visitor pattern for expressions
@@ -234,4 +241,8 @@ func (t *NotExpression) Accept(visitor ExpressionVisitor) interface{} {
 // Not constructs a NotExpression
 func Not(left Expression, right Expression) Expression {
 	return reparent(&NotExpression{binaryExpression{expression{}, left, right}})
+}
+
+// InTable construct a InTableExpression
+func InTable(table, column string, e *criteria.Expression, substring bool) Expression {
 }

@@ -317,6 +317,25 @@ func TestGenerateExpression(t *testing.T) {
 		)
 		expectEqualExpr(t, expectedExpr, actualExpr)
 	})
+
+	/*
+		t.Run("Area name match", func(t *testing.T) {
+			t.Parallel()
+			// given
+			areaName := "planner"
+			q := Query{Name: "area_name", Value: &areaName}
+			// when
+			actualExpr := q.generateExpression()
+			// then
+			expectedExpr := c.Equals(
+				c.Table("area")
+				c.Column("name"),
+				c.Literal(areaName)
+			)
+			expectEqualExpr(t, expectedExpr, actualExpr)
+		})
+	*/
+
 }
 
 func expectEqualExpr(t *testing.T, expectedExpr, actualExpr c.Expression) {
