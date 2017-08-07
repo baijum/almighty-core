@@ -48,6 +48,7 @@ type ExpressionVisitor interface {
 	And(a *AndExpression) interface{}
 	Or(a *OrExpression) interface{}
 	Equals(e *EqualsExpression) interface{}
+	In(e *EqualsExpression) interface{}
 	Parameter(v *ParameterExpression) interface{}
 	Literal(c *LiteralExpression) interface{}
 	Not(e *NotExpression) interface{}
@@ -198,6 +199,11 @@ type EqualsExpression struct {
 	binaryExpression
 }
 
+// InExpression represents the equality operator
+type InExpression struct {
+	binaryExpression
+}
+
 // Accept implements ExpressionVisitor
 func (t *EqualsExpression) Accept(visitor ExpressionVisitor) interface{} {
 	return visitor.Equals(t)
@@ -206,6 +212,11 @@ func (t *EqualsExpression) Accept(visitor ExpressionVisitor) interface{} {
 // Equals constructs an EqualsExpression
 func Equals(left Expression, right Expression) Expression {
 	return reparent(&EqualsExpression{binaryExpression{expression{}, left, right}})
+}
+
+// In constructs an InExpression
+func In(outer Expression, inner Expression) Expression {
+	return reparent(&InExpression{binaryExpression{expression{}, outer, inner}})
 }
 
 // IS NULL
