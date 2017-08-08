@@ -132,19 +132,19 @@ func (c *expressionCompiler) In(e *criteria.EqualsExpression) interface{} {
 	return c.binary(e, " IN ")
 }
 
-func (c *expressionCompiler) InTable(table, column string, e *criteria.Expression, substring bool) interface{} {
-	/*if isInJSONContext(e.Left()) {
+/*func (c *expressionCompiler) InTable(table, column string, e *criteria.Expression, substring bool) interface{} {
+	if isInJSONContext(e.Left()) {
 		return c.binary(e, ":")
 	}
 
-	return c.binary(e, "=")*/
+	return c.binary(e, "=")
 	if substring {
 		return `fields -> system.area IN (
 			SELECT id FROM areas WHERE name ILIKE planner`
 	}
 	return `fields -> system.area IN (
 			SELECT id FROM areas WHERE name = planner`
-}
+}*/
 
 func (c *expressionCompiler) IsNull(e *criteria.IsNullExpression) interface{} {
 	mappedFieldName, isJSONField := getFieldName(e.FieldName)
