@@ -387,7 +387,7 @@ func (q Query) generateExpression() criteria.Expression {
 			}
 		} else {
 			table, column, fieldExpression := q.getTableDetails(q.Name)
-			myexpr = append(myexpr, workitem.InTable(table, column, fieldExpression, q.Substring))
+			myexpr = append(myexpr, criteria.In(table, column, fieldExpression, q.Substring))
 		}
 	}
 	for _, child := range q.Children {

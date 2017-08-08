@@ -1,7 +1,5 @@
 package criteria
 
-import "github.com/fabric8-services/fabric8-wit/criteria"
-
 // Expression is used to express conditions for selecting an entity
 type Expression interface {
 	// Accept calls the visitor callback of the appropriate type
@@ -48,7 +46,7 @@ type ExpressionVisitor interface {
 	And(a *AndExpression) interface{}
 	Or(a *OrExpression) interface{}
 	Equals(e *EqualsExpression) interface{}
-	In(e *EqualsExpression) interface{}
+	In(e *InExpression) interface{}
 	Parameter(v *ParameterExpression) interface{}
 	Literal(c *LiteralExpression) interface{}
 	Not(e *NotExpression) interface{}
@@ -205,6 +203,11 @@ type InExpression struct {
 }
 
 // Accept implements ExpressionVisitor
+func (k *InExpression) Accept(visitor ExpressionVisitor) interface{} {
+	return visitor.In(k)
+}
+
+// Accept implements ExpressionVisitor
 func (t *EqualsExpression) Accept(visitor ExpressionVisitor) interface{} {
 	return visitor.Equals(t)
 }
@@ -254,6 +257,6 @@ func Not(left Expression, right Expression) Expression {
 	return reparent(&NotExpression{binaryExpression{expression{}, left, right}})
 }
 
-// InTable construct a InTableExpression
-func InTable(table, column string, e *criteria.Expression, substring bool) Expression {
-}
+/* InTable construct a InTableExpression
+func InTable(table, column string, e Expression, substring bool) Expression {
+}*/
