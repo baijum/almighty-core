@@ -4,16 +4,21 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/space"
+	"context"
+
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/space"
+
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
 	errs "github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/net/context"
 )
 
 var testSpace string = uuid.NewV4().String()
@@ -25,13 +30,17 @@ func TestRunRepoBBTest(t *testing.T) {
 
 type repoBBTest struct {
 	gormtestsupport.DBTestSuite
-	repo  space.Repository
-	clean func()
+	repo         space.Repository
+	testIdentity account.Identity
+	clean        func()
 }
 
 func (test *repoBBTest) SetupTest() {
 	test.repo = space.NewRepository(test.DB)
 	test.clean = cleaner.DeleteCreatedEntities(test.DB)
+	testIdentity, err := testsupport.CreateTestIdentity(test.DB, "WorkItemSuite setup user", "test provider")
+	require.Nil(test.T(), err)
+	test.testIdentity = *testIdentity
 }
 
 func (test *repoBBTest) TearDownTest() {
@@ -40,7 +49,6 @@ func (test *repoBBTest) TearDownTest() {
 
 func (test *repoBBTest) TestCreate() {
 	res, _ := expectSpace(test.create(testSpace), test.requireOk)
-
 	require.Equal(test.T(), res.Name, testSpace)
 }
 
@@ -53,7 +61,7 @@ func (test *repoBBTest) TestCreateFailSameOwner() {
 
 	require.Equal(test.T(), res.Name, testSpace)
 
-	expectSpace(test.create(testSpace), test.assertBadParameter())
+	expectSpace(test.create(testSpace), test.assertDataConflict())
 }
 
 func (test *repoBBTest) TestLoad() {
@@ -62,6 +70,24 @@ func (test *repoBBTest) TestLoad() {
 
 	res2, _ := expectSpace(test.load(res.ID), test.requireOk)
 	assert.True(test.T(), (*res).Equal(*res2))
+}
+
+func (test *repoBBTest) TestExistsSpace() {
+	t := test.T()
+	resource.Require(t, resource.Database)
+
+	t.Run("space exists", func(t *testing.T) {
+		// given
+		err := test.repo.CheckExists(context.Background(), space.SystemSpace.String())
+		require.Nil(t, err)
+	})
+
+	t.Run("space doesn't exist", func(t *testing.T) {
+		err := test.repo.CheckExists(context.Background(), uuid.NewV4().String())
+
+		require.IsType(t, errors.NotFoundError{}, err)
+	})
+
 }
 
 func (test *repoBBTest) TestSaveOk() {
@@ -139,7 +165,7 @@ func (test *repoBBTest) TestLoadSpaceByName() {
 	expectSpace(test.load(uuid.NewV4()), test.assertNotFound())
 	res, _ := expectSpace(test.create(testSpace), test.requireOk)
 
-	res2, _ := expectSpace(test.loadByUserIdAndName(uuid.Nil, res.Name), test.requireOk)
+	res2, _ := expectSpace(test.loadByUserIdAndName(test.testIdentity.ID, res.Name), test.requireOk)
 	assert.True(test.T(), (*res).Equal(*res2))
 }
 
@@ -155,7 +181,7 @@ func (test *repoBBTest) TestLoadSpaceByNameNonExistentSpaceName() {
 	expectSpace(test.load(uuid.NewV4()), test.assertNotFound())
 	expectSpace(test.create(testSpace), test.requireOk)
 
-	_, err := expectSpace(test.loadByUserIdAndName(uuid.Nil, uuid.NewV4().String()), test.requireErrorType(errors.NotFoundError{}))
+	_, err := expectSpace(test.loadByUserIdAndName(test.testIdentity.ID, uuid.NewV4().String()), test.requireErrorType(errors.NotFoundError{}))
 	assert.NotNil(test.T(), err)
 }
 
@@ -179,6 +205,10 @@ func (test *repoBBTest) assertBadParameter() func(p *space.Space, err error) {
 	return test.assertErrorType(errors.BadParameterError{})
 }
 
+func (test *repoBBTest) assertDataConflict() func(p *space.Space, err error) {
+	return test.assertErrorType(errors.DataConflictError{})
+}
+
 func (test *repoBBTest) assertErrorType(e error) func(p *space.Space, e2 error) {
 	return func(p *space.Space, err error) {
 		assert.Nil(test.T(), p)
@@ -196,7 +226,7 @@ func (test *repoBBTest) requireErrorType(e error) func(p *space.Space, err error
 func (test *repoBBTest) create(name string) func() (*space.Space, error) {
 	newSpace := space.Space{
 		Name:    name,
-		OwnerId: uuid.Nil,
+		OwnerId: test.testIdentity.ID,
 	}
 	return func() (*space.Space, error) { return test.repo.Create(context.Background(), &newSpace) }
 }

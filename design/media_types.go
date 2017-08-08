@@ -5,8 +5,8 @@ import (
 	a "github.com/goadesign/goa/design/apidsl"
 )
 
-// ALMStatus defines the status of the current running ALM instance
-var ALMStatus = a.MediaType("application/vnd.status+json", func() {
+// WITStatus defines the status of the current running WIT instance
+var WITStatus = a.MediaType("application/vnd.status+json", func() {
 	a.Description("The status of the current running instance")
 	a.Attributes(func() {
 		a.Attribute("commit", d.String, "Commit SHA this build is based on")
@@ -40,9 +40,7 @@ var meta = a.Type("workItemListResponseMeta", func() {
 // position represents the ID of the workitem above which the to-be-reordered workitem(s) should be placed
 var position = a.Type("workItemReorderPosition", func() {
 	a.Description("Position represents the ID of the workitem above which the to-be-reordered workitem(s) should be placed")
-	a.Attribute("id", d.String, "ID of the workitem above which the to-be-reordered workitem(s) should be placed", func() {
-		a.MinLength(1)
-	})
+	a.Attribute("id", d.UUID, "ID of the workitem above which the to-be-reordered workitem(s) should be placed")
 	a.Attribute("direction", d.String, "Direction of the place of the reorder workitem. Above should be used to place the reorder workitem(s) above workitem with id equal to position.id. Below should be used to place the reorder workitem(s) below workitem with id equal to position.id. Top places the reorder workitem(s) at the Topmost position of the list. Bottom places the reorder item(s) at the bottom of the list.", func() {
 		a.Enum("above", "below", "top", "bottom")
 	})

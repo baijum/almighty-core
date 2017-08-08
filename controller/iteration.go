@@ -3,16 +3,16 @@ package controller
 import (
 	"fmt"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/iteration"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/rest"
-	"github.com/almighty/almighty-core/space"
-	"github.com/almighty/almighty-core/workitem"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/iteration"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/rest"
+	"github.com/fabric8-services/fabric8-wit/space"
+	"github.com/fabric8-services/fabric8-wit/workitem"
 
 	"github.com/goadesign/goa"
 	uuid "github.com/satori/go.uuid"
@@ -119,8 +119,8 @@ func (c *IterationController) Show(ctx *app.ShowIterationContext) error {
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
-		return ctx.ConditionalEntity(*iter, c.config.GetCacheControlIterations, func() error {
-			wiCounts, err := appl.WorkItems().GetCountsForIteration(ctx, iter.ID)
+		return ctx.ConditionalRequest(*iter, c.config.GetCacheControlIterations, func() error {
+			wiCounts, err := appl.WorkItems().GetCountsForIteration(ctx, iter)
 			if err != nil {
 				return jsonapi.JSONErrorResponse(ctx, err)
 			}
@@ -196,7 +196,7 @@ func (c *IterationController) Update(ctx *app.UpdateIterationContext) error {
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
-		wiCounts, err := appl.WorkItems().GetCountsForIteration(ctx, itr.ID)
+		wiCounts, err := appl.WorkItems().GetCountsForIteration(ctx, itr)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
@@ -235,9 +235,9 @@ func ConvertIterations(request *goa.RequestData, Iterations []iteration.Iteratio
 func ConvertIteration(request *goa.RequestData, itr iteration.Iteration, additional ...IterationConvertFunc) *app.Iteration {
 	iterationType := iteration.APIStringTypeIteration
 	spaceID := itr.SpaceID.String()
-	selfURL := rest.AbsoluteURL(request, app.IterationHref(itr.ID))
-	spaceSelfURL := rest.AbsoluteURL(request, app.SpaceHref(spaceID))
-	workitemsRelatedURL := rest.AbsoluteURL(request, app.WorkitemHref(spaceID, "?filter[iteration]="+itr.ID.String()))
+	relatedURL := rest.AbsoluteURL(request, app.IterationHref(itr.ID))
+	spaceRelatedURL := rest.AbsoluteURL(request, app.SpaceHref(spaceID))
+	workitemsRelatedURL := rest.AbsoluteURL(request, app.WorkitemHref("?filter[iteration]="+itr.ID.String()))
 	pathToTopMostParent := itr.Path.String()
 	i := &app.Iteration{
 		Type: iterationType,
@@ -259,7 +259,8 @@ func ConvertIteration(request *goa.RequestData, itr iteration.Iteration, additio
 					ID:   &spaceID,
 				},
 				Links: &app.GenericLinks{
-					Self: &spaceSelfURL,
+					Self:    &spaceRelatedURL,
+					Related: &spaceRelatedURL,
 				},
 			},
 			Workitems: &app.RelationGeneric{
@@ -269,19 +270,21 @@ func ConvertIteration(request *goa.RequestData, itr iteration.Iteration, additio
 			},
 		},
 		Links: &app.GenericLinks{
-			Self: &selfURL,
+			Self:    &relatedURL,
+			Related: &relatedURL,
 		},
 	}
 	if itr.Path.IsEmpty() == false {
 		parentID := itr.Path.This().String()
-		parentSelfURL := rest.AbsoluteURL(request, app.IterationHref(parentID))
+		parentRelatedURL := rest.AbsoluteURL(request, app.IterationHref(parentID))
 		i.Relationships.Parent = &app.RelationGeneric{
 			Data: &app.GenericData{
 				Type: &iterationType,
 				ID:   &parentID,
 			},
 			Links: &app.GenericLinks{
-				Self: &parentSelfURL,
+				Self:    &parentRelatedURL,
+				Related: &parentRelatedURL,
 			},
 		}
 	}
@@ -303,9 +306,10 @@ func ConvertIterationSimple(request *goa.RequestData, id interface{}) *app.Gener
 }
 
 func createIterationLinks(request *goa.RequestData, id interface{}) *app.GenericLinks {
-	selfURL := rest.AbsoluteURL(request, app.IterationHref(id))
+	relatedURL := rest.AbsoluteURL(request, app.IterationHref(id))
 	return &app.GenericLinks{
-		Self: &selfURL,
+		Self:    &relatedURL,
+		Related: &relatedURL,
 	}
 }
 

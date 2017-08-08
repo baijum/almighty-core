@@ -7,19 +7,19 @@ import (
 
 	"time"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/app/test"
-	"github.com/almighty/almighty-core/auth"
-	"github.com/almighty/almighty-core/configuration"
-	. "github.com/almighty/almighty-core/controller"
-	"github.com/almighty/almighty-core/gormapplication"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/iteration"
-	"github.com/almighty/almighty-core/resource"
-	testsupport "github.com/almighty/almighty-core/test"
-	almtoken "github.com/almighty/almighty-core/token"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/app/test"
+	"github.com/fabric8-services/fabric8-wit/auth"
+	"github.com/fabric8-services/fabric8-wit/configuration"
+	. "github.com/fabric8-services/fabric8-wit/controller"
+	"github.com/fabric8-services/fabric8-wit/gormapplication"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/iteration"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	wittoken "github.com/fabric8-services/fabric8-wit/token"
 	"github.com/goadesign/goa"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
@@ -71,9 +71,9 @@ func (rest *TestSpaceREST) TearDownTest() {
 }
 
 func (rest *TestSpaceREST) SecuredController(identity account.Identity) (*goa.Service, *SpaceController) {
-	priv, _ := almtoken.ParsePrivateKey([]byte(almtoken.RSAPrivateKey))
+	priv, _ := wittoken.ParsePrivateKey([]byte(wittoken.RSAPrivateKey))
 
-	svc := testsupport.ServiceAsUser("Space-Service", almtoken.NewManagerWithPrivateKey(priv), identity)
+	svc := testsupport.ServiceAsUser("Space-Service", wittoken.NewManagerWithPrivateKey(priv), identity)
 	return svc, NewSpaceController(svc, rest.db, spaceConfiguration, &DummyResourceManager{})
 }
 
@@ -133,14 +133,14 @@ func (rest *TestSpaceREST) TestSuccessCreateSpace() {
 }
 
 func (rest *TestSpaceREST) SecuredSpaceAreaController(identity account.Identity) (*goa.Service, *SpaceAreasController) {
-	pub, _ := almtoken.ParsePublicKey([]byte(almtoken.RSAPublicKey))
-	svc := testsupport.ServiceAsUser("Area-Service", almtoken.NewManager(pub), identity)
+	pub, _ := wittoken.ParsePublicKey([]byte(wittoken.RSAPublicKey))
+	svc := testsupport.ServiceAsUser("Area-Service", wittoken.NewManager(pub), identity)
 	return svc, NewSpaceAreasController(svc, rest.db, rest.Configuration)
 }
 
 func (rest *TestSpaceREST) SecuredSpaceIterationController(identity account.Identity) (*goa.Service, *SpaceIterationsController) {
-	pub, _ := almtoken.ParsePublicKey([]byte(almtoken.RSAPublicKey))
-	svc := testsupport.ServiceAsUser("Iteration-Service", almtoken.NewManager(pub), identity)
+	pub, _ := wittoken.ParsePublicKey([]byte(wittoken.RSAPublicKey))
+	svc := testsupport.ServiceAsUser("Iteration-Service", wittoken.NewManager(pub), identity)
 	return svc, NewSpaceIterationsController(svc, rest.db, rest.Configuration)
 }
 
@@ -640,10 +640,7 @@ func (rest *TestSpaceREST) TestFailCreateSameSpaceNameSameOwner() {
 	b := minimumRequiredCreateSpace()
 	b.Data.Attributes.Name = &name
 	b.Data.Attributes.Description = &newDescription
-	_, err := test.CreateSpaceBadRequest(rest.T(), svc.Context, svc, ctrl, b)
-	// then
-	assert.NotEmpty(rest.T(), err.Errors)
-	assert.Contains(rest.T(), err.Errors[0].Detail, "Bad value for parameter 'Name'", "expected: 'unique'")
+	test.CreateSpaceConflict(rest.T(), svc.Context, svc, ctrl, b)
 }
 
 func minimumRequiredCreateSpace() *app.CreateSpacePayload {
@@ -677,7 +674,7 @@ func minimumRequiredUpdateSpace() *app.UpdateSpacePayload {
 }
 
 func generateSpacesTag(entities app.SpaceList) string {
-	modelEntities := make([]app.ConditionalResponseEntity, len(entities.Data))
+	modelEntities := make([]app.ConditionalRequestEntity, len(entities.Data))
 	for i, entityData := range entities.Data {
 		modelEntities[i] = ConvertSpaceToModel(*entityData)
 	}
@@ -688,8 +685,8 @@ func generateSpaceTag(entity app.SpaceSingle) string {
 	return app.GenerateEntityTag(ConvertSpaceToModel(*entity.Data))
 }
 
-func convertSpacesToConditionalEntities(spaceList app.SpaceList) []app.ConditionalResponseEntity {
-	conditionalSpaces := make([]app.ConditionalResponseEntity, len(spaceList.Data))
+func convertSpacesToConditionalEntities(spaceList app.SpaceList) []app.ConditionalRequestEntity {
+	conditionalSpaces := make([]app.ConditionalRequestEntity, len(spaceList.Data))
 	for i, spaceData := range spaceList.Data {
 		conditionalSpaces[i] = ConvertSpaceToModel(*spaceData)
 	}

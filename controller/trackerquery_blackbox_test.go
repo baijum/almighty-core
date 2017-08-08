@@ -6,21 +6,21 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/app/test"
-	. "github.com/almighty/almighty-core/controller"
-	"github.com/almighty/almighty-core/gormapplication"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/remoteworkitem"
-	"github.com/almighty/almighty-core/resource"
-	almrest "github.com/almighty/almighty-core/rest"
-	"github.com/almighty/almighty-core/space"
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/app/test"
+	. "github.com/fabric8-services/fabric8-wit/controller"
+	"github.com/fabric8-services/fabric8-wit/gormapplication"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/remoteworkitem"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	witrest "github.com/fabric8-services/fabric8-wit/rest"
+	"github.com/fabric8-services/fabric8-wit/space"
 
-	testsupport "github.com/almighty/almighty-core/test"
-	almtoken "github.com/almighty/almighty-core/token"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	wittoken "github.com/fabric8-services/fabric8-wit/token"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
@@ -51,9 +51,9 @@ func (rest *TestTrackerQueryREST) TearDownTest() {
 }
 
 func (rest *TestTrackerQueryREST) SecuredController() (*goa.Service, *TrackerController, *TrackerqueryController) {
-	priv, _ := almtoken.ParsePrivateKey([]byte(almtoken.RSAPrivateKey))
+	priv, _ := wittoken.ParsePrivateKey([]byte(wittoken.RSAPrivateKey))
 
-	svc := testsupport.ServiceAsUser("Tracker-Service", almtoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
+	svc := testsupport.ServiceAsUser("Tracker-Service", wittoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
 	return svc, NewTrackerController(svc, rest.db, rest.RwiScheduler, rest.Configuration), NewTrackerqueryController(svc, rest.db, rest.RwiScheduler, rest.Configuration)
 }
 
@@ -63,7 +63,7 @@ func (rest *TestTrackerQueryREST) UnSecuredController() (*goa.Service, *TrackerC
 }
 
 func getTrackerQueryTestData(t *testing.T) []testSecureAPI {
-	privatekey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(almtoken.RSAPrivateKey))
+	privatekey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(wittoken.RSAPrivateKey))
 	if err != nil {
 		t.Fatal("Could not parse Key ", err)
 	}
@@ -199,7 +199,7 @@ func (rest *TestTrackerQueryREST) TestCreateTrackerQuery() {
 	_, result := test.CreateTrackerCreated(t, svc.Context, svc, trackerCtrl, &payload)
 	t.Log(result.ID)
 
-	tqpayload := getCreateTrackerQueryPayload(result.ID)
+	tqpayload := newCreateTrackerQueryPayload(result.ID)
 
 	_, tqresult := test.CreateTrackerqueryCreated(t, nil, nil, trackerQueryCtrl, &tqpayload)
 	t.Log(tqresult)
@@ -219,7 +219,7 @@ func (rest *TestTrackerQueryREST) TestGetTrackerQuery() {
 	}
 	_, result := test.CreateTrackerCreated(t, svc.Context, svc, trackerCtrl, &payload)
 
-	tqpayload := getCreateTrackerQueryPayload(result.ID)
+	tqpayload := newCreateTrackerQueryPayload(result.ID)
 
 	fmt.Printf("tq payload %#v", tqpayload)
 	_, tqresult := test.CreateTrackerqueryCreated(t, nil, nil, trackerQueryCtrl, &tqpayload)
@@ -245,7 +245,7 @@ func (rest *TestTrackerQueryREST) TestUpdateTrackerQuery() {
 	}
 	_, result := test.CreateTrackerCreated(t, svc.Context, svc, trackerCtrl, &payload)
 
-	tqpayload := getCreateTrackerQueryPayload(result.ID)
+	tqpayload := newCreateTrackerQueryPayload(result.ID)
 
 	_, tqresult := test.CreateTrackerqueryCreated(t, nil, nil, trackerQueryCtrl, &tqpayload)
 	test.ShowTrackerqueryOK(t, nil, nil, trackerQueryCtrl, tqresult.ID)
@@ -261,7 +261,7 @@ func (rest *TestTrackerQueryREST) TestUpdateTrackerQuery() {
 	reqLong := &goa.RequestData{
 		Request: &http.Request{Host: "api.service.domain.org"},
 	}
-	spaceSelfURL := almrest.AbsoluteURL(reqLong, app.SpaceHref(space.SystemSpace.String()))
+	spaceSelfURL := witrest.AbsoluteURL(reqLong, app.SpaceHref(space.SystemSpace.String()))
 	payload2 := app.UpdateTrackerQueryAlternatePayload{
 		Query:     tqr.Query,
 		Schedule:  tqr.Schedule,
@@ -297,7 +297,7 @@ func (rest *TestTrackerQueryREST) TestTrackerQueryListItemsNotNil() {
 	_, result := test.CreateTrackerCreated(t, svc.Context, svc, trackerCtrl, &payload)
 	t.Log(result.ID)
 
-	tqpayload := getCreateTrackerQueryPayload(result.ID)
+	tqpayload := newCreateTrackerQueryPayload(result.ID)
 
 	test.CreateTrackerqueryCreated(t, nil, nil, trackerQueryCtrl, &tqpayload)
 	test.CreateTrackerqueryCreated(t, nil, nil, trackerQueryCtrl, &tqpayload)
@@ -311,7 +311,7 @@ func (rest *TestTrackerQueryREST) TestTrackerQueryListItemsNotNil() {
 }
 
 // This test ensures that ID returned by Show is valid.
-// refer : https://github.com/almighty/almighty-core/issues/189
+// refer : https://github.com/fabric8-services/fabric8-wit/issues/189
 func (rest *TestTrackerQueryREST) TestCreateTrackerQueryValidId() {
 	t := rest.T()
 	resource.Require(t, resource.Database)
@@ -324,7 +324,7 @@ func (rest *TestTrackerQueryREST) TestCreateTrackerQueryValidId() {
 	_, result := test.CreateTrackerCreated(t, svc.Context, svc, trackerCtrl, &payload)
 	t.Log(result.ID)
 
-	tqpayload := getCreateTrackerQueryPayload(result.ID)
+	tqpayload := newCreateTrackerQueryPayload(result.ID)
 
 	_, trackerquery := test.CreateTrackerqueryCreated(t, nil, nil, trackerQueryCtrl, &tqpayload)
 	_, created := test.ShowTrackerqueryOK(t, nil, nil, trackerQueryCtrl, trackerquery.ID)
@@ -333,11 +333,11 @@ func (rest *TestTrackerQueryREST) TestCreateTrackerQueryValidId() {
 	}
 }
 
-func getCreateTrackerQueryPayload(trackerID string) app.CreateTrackerQueryAlternatePayload {
+func newCreateTrackerQueryPayload(trackerID string) app.CreateTrackerQueryAlternatePayload {
 	reqLong := &goa.RequestData{
 		Request: &http.Request{Host: "api.service.domain.org"},
 	}
-	spaceSelfURL := almrest.AbsoluteURL(reqLong, app.SpaceHref(space.SystemSpace.String()))
+	spaceSelfURL := witrest.AbsoluteURL(reqLong, app.SpaceHref(space.SystemSpace.String()))
 	return app.CreateTrackerQueryAlternatePayload{
 		Query:     "is:open is:issue user:arquillian author:aslakknutsen",
 		Schedule:  "15 * * * * *",

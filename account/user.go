@@ -1,20 +1,19 @@
 package account
 
 import (
+	"context"
 	"strconv"
 	"time"
 
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/gormsupport"
-	"github.com/almighty/almighty-core/log"
-
-	"github.com/almighty/almighty-core/workitem"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport"
+	"github.com/fabric8-services/fabric8-wit/log"
 
 	"github.com/goadesign/goa"
 	"github.com/jinzhu/gorm"
 	errs "github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/net/context"
 )
 
 // In future, we could add support for FieldDefinitions the way we have for workitems.
@@ -24,15 +23,15 @@ import (
 // User describes a User account. A few identities can be assosiated with one user account
 type User struct {
 	gormsupport.Lifecycle
-	ID                 uuid.UUID       `sql:"type:uuid default uuid_generate_v4()" gorm:"primary_key"` // This is the ID PK field
-	Email              string          `sql:"unique_index"`                                            // This is the unique email field
-	FullName           string          // The fullname of the User
-	ImageURL           string          // The image URL for the User
-	Bio                string          // The bio of the User
-	URL                string          // The URL of the User
-	Company            string          // The (optional) Company of the User
-	Identities         []Identity      // has many Identities from different IDPs
-	ContextInformation workitem.Fields `sql:"type:jsonb"` // context information of the user activity
+	ID                 uuid.UUID          `sql:"type:uuid default uuid_generate_v4()" gorm:"primary_key"` // This is the ID PK field
+	Email              string             `sql:"unique_index"`                                            // This is the unique email field
+	FullName           string             // The fullname of the User
+	ImageURL           string             // The image URL for the User
+	Bio                string             // The bio of the User
+	URL                string             // The URL of the User
+	Company            string             // The (optional) Company of the User
+	Identities         []Identity         // has many Identities from different IDPs
+	ContextInformation ContextInformation `sql:"type:jsonb"` // context information of the user activity
 }
 
 // TableName overrides the table name settings in Gorm to force a specific table name
@@ -64,6 +63,7 @@ func NewUserRepository(db *gorm.DB) UserRepository {
 
 // UserRepository represents the storage interface.
 type UserRepository interface {
+	repository.Exister
 	Load(ctx context.Context, ID uuid.UUID) (*User, error)
 	Create(ctx context.Context, u *User) error
 	Save(ctx context.Context, u *User) error
@@ -90,6 +90,12 @@ func (m *GormUserRepository) Load(ctx context.Context, id uuid.UUID) (*User, err
 		return nil, errors.NewNotFoundError("user", id.String())
 	}
 	return &native, errs.WithStack(err)
+}
+
+// CheckExists returns nil if the given ID exists otherwise returns an error
+func (m *GormUserRepository) CheckExists(ctx context.Context, id string) error {
+	defer goa.MeasureSince([]string{"goa", "db", "user", "exists"}, time.Now())
+	return repository.CheckExists(ctx, m.db, m.TableName(), id)
 }
 
 // Create creates a new record.

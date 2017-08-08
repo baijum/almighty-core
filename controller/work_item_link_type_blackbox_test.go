@@ -8,18 +8,19 @@ import (
 	"testing"
 	"time"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/app/test"
-	. "github.com/almighty/almighty-core/controller"
-	"github.com/almighty/almighty-core/gormapplication"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/migration"
-	"github.com/almighty/almighty-core/resource"
-	"github.com/almighty/almighty-core/space"
-	testsupport "github.com/almighty/almighty-core/test"
-	almtoken "github.com/almighty/almighty-core/token"
-	"github.com/almighty/almighty-core/workitem/link"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/app/test"
+	"github.com/fabric8-services/fabric8-wit/application"
+	. "github.com/fabric8-services/fabric8-wit/controller"
+	"github.com/fabric8-services/fabric8-wit/gormapplication"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/migration"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/space"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	wittoken "github.com/fabric8-services/fabric8-wit/token"
+	"github.com/fabric8-services/fabric8-wit/workitem/link"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/goadesign/goa"
@@ -46,6 +47,7 @@ type workItemLinkTypeSuite struct {
 	categoryName string
 	linkTypeName string
 	linkName     string
+	appDB        *gormapplication.GormDB
 }
 
 // The SetupSuite method will run before the tests in the suite are run.
@@ -63,14 +65,15 @@ func (s *workItemLinkTypeSuite) SetupSuite() {
 	require.NotNil(s.T(), s.linkCatCtrl)
 	s.typeCtrl = NewWorkitemtypeController(svc, gormapplication.NewGormDB(s.DB), s.Configuration)
 	require.NotNil(s.T(), s.typeCtrl)
-	priv, _ := almtoken.ParsePrivateKey([]byte(almtoken.RSAPrivateKey))
-	s.svc = testsupport.ServiceAsUser("workItemLinkSpace-Service", almtoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
+	priv, _ := wittoken.ParsePrivateKey([]byte(wittoken.RSAPrivateKey))
+	s.svc = testsupport.ServiceAsUser("workItemLinkSpace-Service", wittoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
 	s.spaceCtrl = NewSpaceController(svc, gormapplication.NewGormDB(s.DB), s.Configuration, &DummyResourceManager{})
 	require.NotNil(s.T(), s.spaceCtrl)
 	s.spaceName = "test-space" + uuid.NewV4().String()
 	s.categoryName = "test-workitem-category" + uuid.NewV4().String()
 	s.linkTypeName = "test-workitem-link-type" + uuid.NewV4().String()
 	s.linkName = "test-workitem-link" + uuid.NewV4().String()
+	s.appDB = gormapplication.NewGormDB(s.DB)
 }
 
 // The TearDownSuite method will run after all the tests in the suite have been run
@@ -112,8 +115,8 @@ func (s *workItemLinkTypeSuite) SetupTest() {
 	require.NotNil(s.T(), s.linkCatCtrl)
 	s.typeCtrl = NewWorkitemtypeController(svc, gormapplication.NewGormDB(s.DB), s.Configuration)
 	require.NotNil(s.T(), s.typeCtrl)
-	priv, _ := almtoken.ParsePrivateKey([]byte(almtoken.RSAPrivateKey))
-	s.svc = testsupport.ServiceAsUser("workItemLinkSpace-Service", almtoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
+	priv, _ := wittoken.ParsePrivateKey([]byte(wittoken.RSAPrivateKey))
+	s.svc = testsupport.ServiceAsUser("workItemLinkSpace-Service", wittoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
 	s.spaceCtrl = NewSpaceController(svc, gormapplication.NewGormDB(s.DB), s.Configuration, &DummyResourceManager{})
 	require.NotNil(s.T(), s.spaceCtrl)
 	s.spaceName = testsupport.CreateRandomValidTestName("test-space")
@@ -139,17 +142,19 @@ func (s *workItemLinkTypeSuite) createDemoLinkType(name string) *app.CreateWorkI
 	s.spaceID = space.Data.ID
 
 	//	 2. Create at least one work item type
-	workItemTypePayload := CreateWorkItemType(uuid.NewV4(), *space.Data.ID)
+	workItemTypePayload := newCreateWorkItemTypePayload(uuid.NewV4(), *space.Data.ID)
 	_, workItemType := test.CreateWorkitemtypeCreated(s.T(), s.svc.Context, s.svc, s.typeCtrl, *s.spaceID, &workItemTypePayload)
 	require.NotNil(s.T(), workItemType)
 
 	//   3. Create a work item link category
-	createLinkCategoryPayload := CreateWorkItemLinkCategory(s.categoryName)
-	_, workItemLinkCategory := test.CreateWorkItemLinkCategoryCreated(s.T(), s.svc.Context, s.svc, s.linkCatCtrl, createLinkCategoryPayload)
-	require.NotNil(s.T(), workItemLinkCategory)
+	description := "This work item link category is managed by an admin user."
+	catID := createWorkItemLinkCategoryInRepo(s.T(), s.appDB, s.svc.Context, link.WorkItemLinkCategory{
+		Name:        s.categoryName,
+		Description: &description,
+	})
 
 	// 4. Create work item link type payload
-	createLinkTypePayload := CreateWorkItemLinkType(name, *workItemType.Data.ID, *workItemType.Data.ID, *workItemLinkCategory.Data.ID, *space.Data.ID)
+	createLinkTypePayload := newCreateWorkItemLinkTypePayload(name, catID, *space.Data.ID)
 	return createLinkTypePayload
 }
 
@@ -170,8 +175,10 @@ func TestNewWorkItemLinkTypeControllerDBNull(t *testing.T) {
 	})
 }
 
+// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
 // TestCreateWorkItemLinkType tests if we can create the s.linkTypeName work item link type
 func (s *workItemLinkTypeSuite) TestCreateAndDeleteWorkItemLinkType() {
+	s.T().Skip("skipped because Work Item Link Type Create/Update/Delete endpoints are disabled")
 	createPayload := s.createDemoLinkType(s.linkTypeName)
 	_, workItemLinkType := test.CreateWorkItemLinkTypeCreated(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, *createPayload.Data.Relationships.Space.Data.ID, createPayload)
 	require.NotNil(s.T(), workItemLinkType)
@@ -209,11 +216,15 @@ func (s *workItemLinkTypeSuite) TestCreateAndDeleteWorkItemLinkType() {
 //	_, _ = test.CreateWorkItemLinkTypeBadRequest(s.T(), nil, nil, s.linkTypeCtrl, createPayload)
 //}
 
+// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
 func (s *workItemLinkTypeSuite) TestDeleteWorkItemLinkTypeNotFound() {
+	s.T().Skip("skipped because Work Item Link Type Create/Update/Delete endpoints are disabled")
 	test.DeleteWorkItemLinkTypeNotFound(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, space.SystemSpace, uuid.FromStringOrNil("1e9a8b53-73a6-40de-b028-5177add79ffa"))
 }
 
+// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
 func (s *workItemLinkTypeSuite) TestUpdateWorkItemLinkTypeNotFound() {
+	s.T().Skip("skipped because Work Item Link Type Create/Update/Delete endpoints are disabled")
 	createPayload := s.createDemoLinkType(s.linkTypeName)
 	notExistingId := uuid.FromStringOrNil("46bbce9c-8219-4364-a450-dfd1b501654e") // This ID does not exist
 	createPayload.Data.ID = &notExistingId
@@ -235,7 +246,9 @@ func (s *workItemLinkTypeSuite) TestUpdateWorkItemLinkTypeNotFound() {
 // 	test.UpdateWorkItemLinkTypeBadRequest(s.T(), nil, nil, s.linkTypeCtrl, *updateLinkTypePayload.Data.ID, updateLinkTypePayload)
 // }
 
+// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
 func (s *workItemLinkTypeSuite) TestUpdateWorkItemLinkTypeOK() {
+	s.T().Skip("skipped because Work Item Link Type Create/Update/Delete endpoints are disabled")
 	// given
 	createPayload := s.createDemoLinkType(s.linkTypeName)
 	_, workItemLinkType := test.CreateWorkItemLinkTypeCreated(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, *createPayload.Data.Relationships.Space.Data.ID, createPayload)
@@ -265,7 +278,9 @@ func (s *workItemLinkTypeSuite) TestUpdateWorkItemLinkTypeOK() {
 	require.Equal(s.T(), s.spaceName, *spaceData.Attributes.Name, "The work item link type's space should have the name 'test-space'.")
 }
 
+// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
 func (s *workItemLinkTypeSuite) TestUpdateWorkItemLinkTypeConflict() {
+	s.T().Skip("skipped because Work Item Link Type Create/Update/Delete endpoints are disabled")
 	// given
 	createPayload := s.createDemoLinkType(s.linkTypeName)
 	_, workItemLinkType := test.CreateWorkItemLinkTypeCreated(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, *createPayload.Data.Relationships.Space.Data.ID, createPayload)
@@ -294,9 +309,31 @@ func (s *workItemLinkTypeSuite) TestUpdateWorkItemLinkTypeConflict() {
 
 func (s *workItemLinkTypeSuite) createWorkItemLinkType() *app.WorkItemLinkTypeSingle {
 	createPayload := s.createDemoLinkType(s.linkTypeName)
-	_, workItemLinkType := test.CreateWorkItemLinkTypeCreated(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, *createPayload.Data.Relationships.Space.Data.ID, createPayload)
+	workItemLinkType := createWorkItemLinkTypeInRepo(s.T(), s.appDB, s.svc.Context, createPayload)
 	require.NotNil(s.T(), workItemLinkType)
 	return workItemLinkType
+}
+
+func createWorkItemLinkTypeInRepo(t *testing.T, db application.DB, ctx context.Context, payload *app.CreateWorkItemLinkTypePayload) *app.WorkItemLinkTypeSingle {
+	appLinkType := app.WorkItemLinkTypeSingle{
+		Data: payload.Data,
+	}
+	modelLinkType, err := ConvertWorkItemLinkTypeToModel(appLinkType)
+	require.Nil(t, err)
+	var appLinkTypeResult app.WorkItemLinkTypeSingle
+	err = application.Transactional(db, func(appl application.Application) error {
+		createdModelLinkType, err := appl.WorkItemLinkTypes().Create(ctx, modelLinkType)
+		if err != nil {
+			return err
+		}
+		r := &goa.RequestData{
+			Request: &http.Request{Host: "domain.io"},
+		}
+		appLinkTypeResult = ConvertWorkItemLinkTypeFromModel(r, *createdModelLinkType)
+		return nil
+	})
+	require.Nil(t, err)
+	return &appLinkTypeResult
 }
 
 func assertWorkItemLinkType(t *testing.T, expected *app.WorkItemLinkTypeSingle, spaceName, categoryName string, actual *app.WorkItemLinkTypeSingle) {
@@ -381,15 +418,15 @@ func (s *workItemLinkTypeSuite) TestShowWorkItemLinkTypeNotFound() {
 }
 func (s *workItemLinkTypeSuite) createWorkItemLinkTypes() (*app.WorkItemTypeSingle, *app.WorkItemLinkTypeSingle) {
 	bugBlockerPayload := s.createDemoLinkType(s.linkTypeName)
-	_, bugBlockerType := test.CreateWorkItemLinkTypeCreated(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, *bugBlockerPayload.Data.Relationships.Space.Data.ID, bugBlockerPayload)
+	bugBlockerType := createWorkItemLinkTypeInRepo(s.T(), s.appDB, s.svc.Context, bugBlockerPayload)
 	require.NotNil(s.T(), bugBlockerType)
 
-	workItemTypePayload := CreateWorkItemType(uuid.NewV4(), *s.spaceID)
+	workItemTypePayload := newCreateWorkItemTypePayload(uuid.NewV4(), *s.spaceID)
 	_, workItemType := test.CreateWorkitemtypeCreated(s.T(), s.svc.Context, s.svc, s.typeCtrl, *bugBlockerPayload.Data.Relationships.Space.Data.ID, &workItemTypePayload)
 	require.NotNil(s.T(), workItemType)
 
-	relatedPayload := CreateWorkItemLinkType(s.linkName, *workItemType.Data.ID, *workItemType.Data.ID, bugBlockerType.Data.Relationships.LinkCategory.Data.ID, *bugBlockerType.Data.Relationships.Space.Data.ID)
-	_, relatedType := test.CreateWorkItemLinkTypeCreated(s.T(), s.svc.Context, s.svc, s.linkTypeCtrl, *relatedPayload.Data.Relationships.Space.Data.ID, relatedPayload)
+	relatedPayload := newCreateWorkItemLinkTypePayload(s.linkName, bugBlockerType.Data.Relationships.LinkCategory.Data.ID, *bugBlockerType.Data.Relationships.Space.Data.ID)
+	relatedType := createWorkItemLinkTypeInRepo(s.T(), s.appDB, s.svc.Context, relatedPayload)
 	require.NotNil(s.T(), relatedType)
 	return workItemType, relatedType
 
@@ -472,7 +509,7 @@ func (s *workItemLinkTypeSuite) TestListWorkItemLinkTypeNotModifiedUsingIfNoneMa
 	_, createdWorkItemLinkType := s.createWorkItemLinkTypes()
 	_, existingLinkTypes := test.ListWorkItemLinkTypeOK(s.T(), nil, nil, s.linkTypeCtrl, *createdWorkItemLinkType.Data.Relationships.Space.Data.ID, nil, nil)
 	// when fetching all work item link type in a give space
-	createdWorkItemLinkTypeModels := make([]app.ConditionalResponseEntity, len(existingLinkTypes.Data))
+	createdWorkItemLinkTypeModels := make([]app.ConditionalRequestEntity, len(existingLinkTypes.Data))
 	for i, linkTypeData := range existingLinkTypes.Data {
 		createdWorkItemLinkTypeModel, err := ConvertWorkItemLinkTypeToModel(
 			app.WorkItemLinkTypeSingle{

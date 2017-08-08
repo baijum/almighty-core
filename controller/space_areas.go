@@ -1,10 +1,10 @@
 package controller
 
 import (
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/log"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/log"
 
 	"github.com/goadesign/goa"
 )
@@ -33,9 +33,8 @@ func NewSpaceAreasController(service *goa.Service, db application.DB, config Spa
 // List runs the list action.
 func (c *SpaceAreasController) List(ctx *app.ListSpaceAreasContext) error {
 	return application.Transactional(c.db, func(appl application.Application) error {
-		_, err := appl.Spaces().Load(ctx, ctx.SpaceID)
-		if err != nil {
-			return jsonapi.JSONErrorResponse(ctx, goa.ErrNotFound(err.Error()))
+		if err := appl.Spaces().CheckExists(ctx, ctx.SpaceID.String()); err != nil {
+			return jsonapi.JSONErrorResponse(ctx, err)
 		}
 		areas, err := appl.Areas().List(ctx, ctx.SpaceID)
 		if err != nil {

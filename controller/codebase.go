@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/codebase"
-	"github.com/almighty/almighty-core/codebase/che"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/rest"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/codebase"
+	"github.com/fabric8-services/fabric8-wit/codebase/che"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/rest"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/goadesign/goa"
@@ -136,9 +136,9 @@ func (c *CodebaseController) Create(ctx *app.CreateCodebaseContext) error {
 	}
 	cheClient := che.NewStarterClient(c.config.GetCheStarterURL(), c.config.GetOpenshiftTenantMasterURL(), getNamespace(ctx))
 
-	stackID := cb.StackID
-	if cb.StackID == "" {
-		stackID = "java-centos"
+	stackID := "java-centos"
+	if cb.StackID != nil && *cb.StackID != "" {
+		stackID = *cb.StackID
 	}
 	workspace := che.WorkspaceRequest{
 		Branch:     "master",
@@ -255,9 +255,9 @@ func ConvertCodebase(request *goa.RequestData, codebase *codebase.Codebase, addi
 
 	spaceID := codebase.SpaceID.String()
 
-	selfURL := rest.AbsoluteURL(request, app.CodebaseHref(codebase.ID))
+	relatedURL := rest.AbsoluteURL(request, app.CodebaseHref(codebase.ID))
 	editURL := rest.AbsoluteURL(request, app.CodebaseHref(codebase.ID)+"/edit")
-	spaceSelfURL := rest.AbsoluteURL(request, app.SpaceHref(spaceID))
+	spaceRelatedURL := rest.AbsoluteURL(request, app.SpaceHref(spaceID))
 
 	i := &app.Codebase{
 		Type: codebaseType,
@@ -266,7 +266,7 @@ func ConvertCodebase(request *goa.RequestData, codebase *codebase.Codebase, addi
 			CreatedAt:         &codebase.CreatedAt,
 			Type:              &codebase.Type,
 			URL:               &codebase.URL,
-			StackID:           &codebase.StackID,
+			StackID:           codebase.StackID,
 			LastUsedWorkspace: &codebase.LastUsedWorkspace,
 		},
 		Relationships: &app.CodebaseRelations{
@@ -276,13 +276,15 @@ func ConvertCodebase(request *goa.RequestData, codebase *codebase.Codebase, addi
 					ID:   &spaceID,
 				},
 				Links: &app.GenericLinks{
-					Self: &spaceSelfURL,
+					Self:    &spaceRelatedURL,
+					Related: &spaceRelatedURL,
 				},
 			},
 		},
 		Links: &app.CodebaseLinks{
-			Self: &selfURL,
-			Edit: &editURL,
+			Self:    &relatedURL,
+			Related: &relatedURL,
+			Edit:    &editURL,
 		},
 	}
 	for _, add := range additional {

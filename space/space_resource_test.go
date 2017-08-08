@@ -3,16 +3,21 @@ package space_test
 import (
 	"testing"
 
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/space"
+	"context"
+
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/space"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+
 	errs "github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/net/context"
 )
 
 var testResourceID string = uuid.NewV4().String()
@@ -28,15 +33,19 @@ func TestRunResourceRepoBBTest(t *testing.T) {
 
 type resourceRepoBBTest struct {
 	gormtestsupport.DBTestSuite
-	repo  space.ResourceRepository
-	sRepo space.Repository
-	clean func()
+	repo         space.ResourceRepository
+	sRepo        space.Repository
+	testIdentity account.Identity
+	clean        func()
 }
 
 func (test *resourceRepoBBTest) SetupTest() {
 	test.repo = space.NewResourceRepository(test.DB)
 	test.sRepo = space.NewRepository(test.DB)
 	test.clean = cleaner.DeleteCreatedEntities(test.DB)
+	testIdentity, err := testsupport.CreateTestIdentity(test.DB, "WorkItemSuite setup user", "test provider")
+	require.Nil(test.T(), err)
+	test.testIdentity = *testIdentity
 }
 
 func (test *resourceRepoBBTest) TearDownTest() {
@@ -57,6 +66,27 @@ func (test *resourceRepoBBTest) TestLoad() {
 
 	res2, _, _ := expectResource(test.load(res.ID), test.requireOk)
 	assert.True(test.T(), (*res).Equal(*res2))
+}
+
+func (test *resourceRepoBBTest) TestExistsSpaceResource() {
+	t := test.T()
+	resource.Require(t, resource.Database)
+
+	t.Run("space resource exists", func(t *testing.T) {
+		// given
+		expectResource(test.load(uuid.NewV4()), test.assertNotFound())
+		res, _, _ := expectResource(test.create(testResourceID, testPolicyID, testPermissionID), test.requireOk)
+
+		err := test.repo.CheckExists(context.Background(), res.ID.String())
+		require.Nil(t, err)
+	})
+
+	t.Run("space resource doesn't exist", func(t *testing.T) {
+		err := test.repo.CheckExists(context.Background(), uuid.NewV4().String())
+
+		require.IsType(t, errors.NotFoundError{}, err)
+	})
+
 }
 
 func (test *resourceRepoBBTest) TestSaveOk() {
@@ -143,7 +173,7 @@ func (test *resourceRepoBBTest) requireErrorType(e error) func(p *space.Resource
 func (test *resourceRepoBBTest) create(resourceID string, policyID string, permissionID string) func() (*space.Resource, *space.Space, error) {
 	newSpace := space.Space{
 		Name:    uuid.NewV4().String(),
-		OwnerId: uuid.Nil,
+		OwnerId: test.testIdentity.ID,
 	}
 
 	newResource := space.Resource{

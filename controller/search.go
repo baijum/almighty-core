@@ -3,14 +3,14 @@ package controller
 import (
 	"fmt"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/search"
-	"github.com/almighty/almighty-core/space"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/search"
+	"github.com/fabric8-services/fabric8-wit/space"
 
 	"github.com/goadesign/goa"
 	errs "github.com/pkg/errors"
@@ -29,20 +29,18 @@ type SearchController struct {
 
 // NewSearchController creates a search controller.
 func NewSearchController(service *goa.Service, db application.DB, configuration searchConfiguration) *SearchController {
-	if db == nil {
-		panic("db must not be nil")
-	}
 	return &SearchController{Controller: service.NewController("SearchController"), db: db, configuration: configuration}
 }
 
 // Show runs the show action.
 func (c *SearchController) Show(ctx *app.ShowSearchContext) error {
+
 	var offset int
 	var limit int
 
 	offset, limit = computePagingLimits(ctx.PageOffset, ctx.PageLimit)
 
-	// ToDo : Keep URL registeration central somehow.
+	// TODO: Keep URL registeration central somehow.
 	hostString := ctx.RequestData.Host
 	if hostString == "" {
 		hostString = c.configuration.GetHTTPAddress()
@@ -52,21 +50,64 @@ func (c *SearchController) Show(ctx *app.ShowSearchContext) error {
 	urlRegexString = fmt.Sprintf("(?P<domain>%s)(?P<path>/work-item/board/detail/)(?P<id>\\d*)", hostString)
 	search.RegisterAsKnownURL(search.HostRegistrationKeyForBoardWI, urlRegexString)
 
+	if ctx.FilterExpression != nil {
+		return application.Transactional(c.db, func(appl application.Application) error {
+			result, c, err := appl.SearchItems().Filter(ctx.Context, *ctx.FilterExpression, ctx.FilterParentexists, &offset, &limit)
+			count := int(c)
+			if err != nil {
+				cause := errs.Cause(err)
+				switch cause.(type) {
+				case errors.BadParameterError:
+					jerrors, _ := jsonapi.ErrorToJSONAPIErrors(ctx,
+						goa.ErrBadRequest(fmt.Sprintf("error listing work items for expression '%s': %s", *ctx.FilterExpression, err)))
+					return ctx.BadRequest(jerrors)
+				default:
+					log.Error(ctx, map[string]interface{}{
+						"err":               err,
+						"filter_expression": *ctx.FilterExpression,
+					}, "unable to list the work items")
+					jerrors, _ := jsonapi.ErrorToJSONAPIErrors(ctx, goa.ErrInternal(fmt.Sprintf("unable to list the work items: %s", err)))
+					return ctx.InternalServerError(jerrors)
+				}
+			}
+
+			hasChildren := workItemIncludeHasChildren(appl, ctx)
+			response := app.SearchWorkItemList{
+				Links: &app.PagingLinks{},
+				Meta:  &app.WorkItemListResponseMeta{TotalCount: count},
+				Data:  ConvertWorkItems(ctx.RequestData, result, hasChildren),
+			}
+
+			setPagingLinks(response.Links, buildAbsoluteURL(ctx.RequestData), len(result), offset, limit, count, "filter[expression]="+*ctx.FilterExpression)
+			return ctx.OK(&response)
+		})
+
+	}
 	return application.Transactional(c.db, func(appl application.Application) error {
-		//return transaction.Do(c.ts, func() error {
-		result, c, err := appl.SearchItems().SearchFullText(ctx.Context, ctx.Q, &offset, &limit, ctx.SpaceID)
+		if ctx.Q == nil || *ctx.Q == "" {
+			jerrors, _ := jsonapi.ErrorToJSONAPIErrors(ctx,
+				goa.ErrBadRequest("empty search query not allowed"))
+			return ctx.BadRequest(jerrors)
+		}
+
+		result, c, err := appl.SearchItems().SearchFullText(ctx.Context, *ctx.Q, &offset, &limit, ctx.SpaceID)
 		count := int(c)
 		if err != nil {
 			cause := errs.Cause(err)
 			switch cause.(type) {
 			case errors.BadParameterError:
-				jerrors, _ := jsonapi.ErrorToJSONAPIErrors(goa.ErrBadRequest(fmt.Sprintf("error listing work items: %s", err.Error())))
+				log.Error(ctx, map[string]interface{}{
+					"err":        err,
+					"expression": *ctx.Q,
+				}, "unable to list the work items")
+				jerrors, _ := jsonapi.ErrorToJSONAPIErrors(ctx, goa.ErrBadRequest(fmt.Sprintf("error listing work items for expression: %s: %s", *ctx.Q, err)))
 				return ctx.BadRequest(jerrors)
 			default:
 				log.Error(ctx, map[string]interface{}{
-					"err": err,
+					"err":        err,
+					"expression": *ctx.Q,
 				}, "unable to list the work items")
-				jerrors, _ := jsonapi.ErrorToJSONAPIErrors(goa.ErrInternal(err.Error()))
+				jerrors, _ := jsonapi.ErrorToJSONAPIErrors(ctx, goa.ErrInternal(fmt.Sprintf("unable to list the work items expression: %s: %s", *ctx.Q, err)))
 				return ctx.InternalServerError(jerrors)
 			}
 		}
@@ -77,7 +118,7 @@ func (c *SearchController) Show(ctx *app.ShowSearchContext) error {
 			Data:  ConvertWorkItems(ctx.RequestData, result),
 		}
 
-		setPagingLinks(response.Links, buildAbsoluteURL(ctx.RequestData), len(result), offset, limit, count, "q="+ctx.Q)
+		setPagingLinks(response.Links, buildAbsoluteURL(ctx.RequestData), len(result), offset, limit, count, "q="+*ctx.Q)
 		return ctx.OK(&response)
 	})
 }
@@ -86,7 +127,7 @@ func (c *SearchController) Show(ctx *app.ShowSearchContext) error {
 func (c *SearchController) Spaces(ctx *app.SpacesSearchContext) error {
 	q := ctx.Q
 	if q == "" {
-		return jsonapi.JSONErrorResponse(ctx, goa.ErrBadRequest(fmt.Errorf("empty search query not allowed")))
+		return jsonapi.JSONErrorResponse(ctx, goa.ErrBadRequest("empty search query not allowed"))
 	} else if q == "*" {
 		q = "" // Allow empty query if * specified
 	}
@@ -105,7 +146,13 @@ func (c *SearchController) Spaces(ctx *app.SpacesSearchContext) error {
 			cause := errs.Cause(err)
 			switch cause.(type) {
 			case errors.BadParameterError:
-				return jsonapi.JSONErrorResponse(ctx, goa.ErrBadRequest(fmt.Sprintf("error listing spaces: %s", err.Error())))
+				log.Error(ctx, map[string]interface{}{
+					"query":  q,
+					"offset": offset,
+					"limit":  limit,
+					"err":    err,
+				}, "unable to list spaces")
+				return jsonapi.JSONErrorResponse(ctx, goa.ErrBadRequest(fmt.Sprintf("error listing spaces for expression: %s: %s", q, err)))
 			default:
 				log.Error(ctx, map[string]interface{}{
 					"query":  q,
@@ -113,7 +160,7 @@ func (c *SearchController) Spaces(ctx *app.SpacesSearchContext) error {
 					"limit":  limit,
 					"err":    err,
 				}, "unable to list spaces")
-				return jsonapi.JSONErrorResponse(ctx, goa.ErrInternal(err.Error()))
+				return jsonapi.JSONErrorResponse(ctx, goa.ErrInternal(fmt.Sprintf("unable to list spaces for expression: %s: %s", q, err)))
 			}
 		}
 
@@ -137,7 +184,7 @@ func (c *SearchController) Users(ctx *app.UsersSearchContext) error {
 
 	q := ctx.Q
 	if q == "" {
-		return ctx.BadRequest(goa.ErrBadRequest(fmt.Errorf("empty search query not allowed")))
+		return ctx.BadRequest(goa.ErrBadRequest("empty search query not allowed"))
 	}
 
 	var result []account.Identity

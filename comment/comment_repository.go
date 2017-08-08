@@ -4,9 +4,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/rendering"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/rendering"
 	"github.com/goadesign/goa"
 	"github.com/jinzhu/gorm"
 
@@ -16,12 +17,13 @@ import (
 
 // Repository describes interactions with comments
 type Repository interface {
+	repository.Exister
 	Create(ctx context.Context, comment *Comment, creator uuid.UUID) error
 	Save(ctx context.Context, comment *Comment, modifier uuid.UUID) error
 	Delete(ctx context.Context, commentID uuid.UUID, suppressor uuid.UUID) error
-	List(ctx context.Context, parent string, start *int, limit *int) ([]Comment, uint64, error)
+	List(ctx context.Context, parent uuid.UUID, start *int, limit *int) ([]Comment, uint64, error)
 	Load(ctx context.Context, id uuid.UUID) (*Comment, error)
-	Count(ctx context.Context, parent string) (int, error)
+	Count(ctx context.Context, parentID uuid.UUID) (int, error)
 }
 
 // NewRepository creates a new storage type.
@@ -33,12 +35,6 @@ func NewRepository(db *gorm.DB) Repository {
 type GormCommentRepository struct {
 	db                 *gorm.DB
 	revisionRepository RevisionRepository
-}
-
-// TableName overrides the table name settings in Gorm to force a specific table name
-// in the database.
-func (m *GormCommentRepository) TableName() string {
-	return "comments"
 }
 
 // Create creates a new record.
@@ -84,7 +80,7 @@ func (m *GormCommentRepository) Save(ctx context.Context, comment *Comment, modi
 			"err":        err,
 		}, "comment search operation failed!")
 
-		return errors.NewInternalError(err.Error())
+		return errors.NewInternalError(ctx, err)
 	}
 	// make sure no comment is created with an empty 'markup' value
 	if comment.Markup == "" {
@@ -97,7 +93,7 @@ func (m *GormCommentRepository) Save(ctx context.Context, comment *Comment, modi
 			"err":        err,
 		}, "unable to save the comment!")
 
-		return errors.NewInternalError(err.Error())
+		return errors.NewInternalError(ctx, err)
 	}
 	// save a revision of the updated comment
 	if err := m.revisionRepository.Create(ctx, modifierID, RevisionTypeUpdate, *comment); err != nil {
@@ -123,7 +119,7 @@ func (m *GormCommentRepository) Delete(ctx context.Context, commentID uuid.UUID,
 		return errors.NewNotFoundError("comment", commentID.String())
 	}
 	if err := tx.Error; err != nil {
-		return errors.NewInternalError(err.Error())
+		return errors.NewInternalError(ctx, err)
 	}
 	// save a revision of the deleted comment
 	if err := m.revisionRepository.Create(ctx, suppressorID, RevisionTypeDelete, c); err != nil {
@@ -133,10 +129,10 @@ func (m *GormCommentRepository) Delete(ctx context.Context, commentID uuid.UUID,
 }
 
 // List all comments related to a single item
-func (m *GormCommentRepository) List(ctx context.Context, parent string, start *int, limit *int) ([]Comment, uint64, error) {
+func (m *GormCommentRepository) List(ctx context.Context, parentID uuid.UUID, start *int, limit *int) ([]Comment, uint64, error) {
 	defer goa.MeasureSince([]string{"goa", "db", "comment", "query"}, time.Now())
 
-	db := m.db.Model(&Comment{}).Where("parent_id = ?", parent)
+	db := m.db.Model(&Comment{}).Where("parent_id = ?", parentID)
 	orgDB := db
 	if start != nil {
 		if *start < 0 {
@@ -161,7 +157,7 @@ func (m *GormCommentRepository) List(ctx context.Context, parent string, start *
 	result := []Comment{}
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, 0, errors.NewInternalError(err.Error())
+		return nil, 0, errors.NewInternalError(ctx, err)
 	}
 
 	// need to set up a result for Scan() in order to extract total count.
@@ -181,7 +177,7 @@ func (m *GormCommentRepository) List(ctx context.Context, parent string, start *
 		if first {
 			first = false
 			if err = rows.Scan(columnValues...); err != nil {
-				return nil, 0, errors.NewInternalError(err.Error())
+				return nil, 0, errors.NewInternalError(ctx, err)
 			}
 		}
 		result = append(result, *value)
@@ -202,11 +198,11 @@ func (m *GormCommentRepository) List(ctx context.Context, parent string, start *
 }
 
 // Count all comments related to a single item
-func (m *GormCommentRepository) Count(ctx context.Context, parent string) (int, error) {
+func (m *GormCommentRepository) Count(ctx context.Context, parentID uuid.UUID) (int, error) {
 	defer goa.MeasureSince([]string{"goa", "db", "comment", "query"}, time.Now())
 	var count int
 
-	m.db.Model(&Comment{}).Where("parent_id = ?", parent).Count(&count)
+	m.db.Model(&Comment{}).Where("parent_id = ?", parentID).Count(&count)
 
 	return count, nil
 }
@@ -230,7 +226,13 @@ func (m *GormCommentRepository) Load(ctx context.Context, id uuid.UUID) (*Commen
 			"err":        tx.Error,
 		}, "unable to load the comment")
 
-		return nil, errors.NewInternalError(tx.Error.Error())
+		return nil, errors.NewInternalError(ctx, tx.Error)
 	}
 	return &obj, nil
+}
+
+// CheckExists returns nil if the given ID exists otherwise returns an error
+func (m *GormCommentRepository) CheckExists(ctx context.Context, id string) error {
+	defer goa.MeasureSince([]string{"goa", "db", "comment", "exists"}, time.Now())
+	return repository.CheckExists(ctx, m.db, Comment{}.TableName(), id)
 }

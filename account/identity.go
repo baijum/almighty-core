@@ -1,19 +1,21 @@
 package account
 
 import (
+	"context"
 	"database/sql/driver"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/gormsupport"
-	"github.com/almighty/almighty-core/log"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport"
+	"github.com/fabric8-services/fabric8-wit/log"
+
 	"github.com/goadesign/goa"
 	"github.com/jinzhu/gorm"
 	errs "github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/net/context"
 )
 
 const (
@@ -59,7 +61,7 @@ func (u NullUUID) Value() (driver.Value, error) {
 // One User account can have many Identities
 type Identity struct {
 	gormsupport.Lifecycle
-	// This is the ID PK field. For identities provided by Keyclaok this ID equals to the Keycloak. For other types of IDP (github, oso, etc) this ID is generated automaticaly
+	// This is the ID PK field. For identities provided by Keycloak this ID equals to the Keycloak. For other types of IDP (github, oso, etc) this ID is generated automaticaly
 	ID uuid.UUID `sql:"type:uuid default uuid_generate_v4()" gorm:"primary_key"`
 	// The username of the Identity
 	Username string
@@ -104,6 +106,7 @@ func NewIdentityRepository(db *gorm.DB) *GormIdentityRepository {
 
 // IdentityRepository represents the storage interface.
 type IdentityRepository interface {
+	repository.Exister
 	Load(ctx context.Context, id uuid.UUID) (*Identity, error)
 	Create(ctx context.Context, identity *Identity) error
 	Lookup(ctx context.Context, username, profileURL, providerType string) (*Identity, error)
@@ -136,6 +139,12 @@ func (m *GormIdentityRepository) Load(ctx context.Context, id uuid.UUID) (*Ident
 	}
 
 	return &native, errs.WithStack(err)
+}
+
+// CheckExists returns nil if the given ID exists otherwise returns an error
+func (m *GormIdentityRepository) CheckExists(ctx context.Context, id string) error {
+	defer goa.MeasureSince([]string{"goa", "db", "identity", "exists"}, time.Now())
+	return repository.CheckExists(ctx, m.db, m.TableName(), id)
 }
 
 // Create creates a new record.
@@ -283,7 +292,7 @@ func IdentityFilterByUserID(userID uuid.UUID) func(db *gorm.DB) *gorm.DB {
 // IdentityFilterByUsername is a gorm filter by 'username'
 func IdentityFilterByUsername(username string) func(db *gorm.DB) *gorm.DB {
 	return func(db *gorm.DB) *gorm.DB {
-		return db.Where("username = ?", username).Limit(1)
+		return db.Where("lower(username) = ?", strings.ToLower(username)).Limit(1)
 	}
 }
 
@@ -341,11 +350,7 @@ func (m *GormIdentityRepository) List(ctx context.Context) ([]Identity, error) {
 
 // IsValid returns true if the identity exists
 func (m *GormIdentityRepository) IsValid(ctx context.Context, id uuid.UUID) bool {
-	_, err := m.Load(ctx, id)
-	if err != nil {
-		return false
-	}
-	return true
+	return m.CheckExists(ctx, id.String()) == nil
 }
 
 // Search searches for Identites where FullName like %q% or users.email like %q% or users.username like %q%
@@ -359,7 +364,7 @@ func (m *GormIdentityRepository) Search(ctx context.Context, q string, start int
 	db = db.Joins("LEFT JOIN users ON identities.user_id = users.id")
 	db = db.Where("LOWER(users.full_name) like ?", "%"+strings.ToLower(q)+"%")
 	db = db.Or("users.email like ?", "%"+strings.ToLower(q)+"%")
-	db = db.Or("identities.username like ?", "%"+strings.ToLower(q)+"%")
+	db = db.Or("lower(identities.username) like ?", "%"+strings.ToLower(q)+"%")
 	db = db.Group("identities.id,identities.username,users.id")
 	//db = db.Preload("user")
 
@@ -373,7 +378,7 @@ func (m *GormIdentityRepository) Search(ctx context.Context, q string, start int
 	value := Identity{}
 	columns, err := rows.Columns()
 	if err != nil {
-		return nil, 0, errors.NewInternalError(err.Error())
+		return nil, 0, errors.NewInternalError(ctx, err)
 	}
 
 	// need to set up a result for Scan() in order to extract total count.
@@ -396,12 +401,12 @@ func (m *GormIdentityRepository) Search(ctx context.Context, q string, start int
 		db.ScanRows(rows, &value.User)
 
 		if err = rows.Scan(columnValues...); err != nil {
-			return nil, 0, errors.NewInternalError(err.Error())
+			return nil, 0, errors.NewInternalError(ctx, err)
 		}
 
 		value.ID, err = uuid.FromString(identityID)
 		if err != nil {
-			return nil, 0, errors.NewInternalError(err.Error())
+			return nil, 0, errors.NewInternalError(ctx, err)
 		}
 
 		value.Username = identityUsername

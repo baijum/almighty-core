@@ -5,15 +5,19 @@ import (
 
 	"fmt"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/criteria"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/workitem"
+	"context"
+
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/criteria"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/workitem"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
-	"golang.org/x/net/context"
 	govalidator "gopkg.in/asaskevich/govalidator.v4"
 )
+
+const trackersTableName = "trackers"
 
 // GormTrackerRepository implements TrackerRepository using gorm
 type GormTrackerRepository struct {
@@ -89,6 +93,11 @@ func (r *GormTrackerRepository) Load(ctx context.Context, ID string) (*app.Track
 		Type: res.Type}
 
 	return &t, nil
+}
+
+// CheckExists returns nil if the given ID exists otherwise returns an error
+func (r *GormTrackerRepository) CheckExists(ctx context.Context, id string) error {
+	return repository.CheckExists(ctx, r.db, trackersTableName, id)
 }
 
 // List returns tracker selected by the given criteria.Expression, starting with start (zero-based) and returning at most limit items

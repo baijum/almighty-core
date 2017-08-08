@@ -1,20 +1,20 @@
 package account_test
 
 import (
+	"context"
 	"testing"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/migration"
-	"github.com/almighty/almighty-core/resource"
-	"github.com/almighty/almighty-core/workitem"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/migration"
+	"github.com/fabric8-services/fabric8-wit/resource"
 
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/net/context"
 )
 
 type userBlackBoxTest struct {
@@ -76,6 +76,29 @@ func (s *userBlackBoxTest) TestOKToLoad() {
 	createAndLoadUser(s) // this function does the needful already
 }
 
+func (s *userBlackBoxTest) TestExistsUser() {
+	t := s.T()
+	resource.Require(t, resource.Database)
+
+	t.Run("user exists", func(t *testing.T) {
+		//t.Parallel()
+		user := createAndLoadUser(s)
+		// when
+		err := s.repo.CheckExists(s.ctx, user.ID.String())
+		// then
+		require.Nil(t, err)
+	})
+
+	t.Run("user doesn't exist", func(t *testing.T) {
+		//t.Parallel()
+		// Check not existing
+		err := s.repo.CheckExists(s.ctx, uuid.NewV4().String())
+		// then
+		//
+		require.IsType(s.T(), errors.NotFoundError{}, err)
+	})
+}
+
 func (s *userBlackBoxTest) TestOKToSave() {
 	t := s.T()
 	resource.Require(t, resource.Database)
@@ -103,7 +126,7 @@ func createAndLoadUser(s *userBlackBoxTest) *account.User {
 		ImageURL: "someImageUrl" + uuid.NewV4().String(),
 		Bio:      "somebio" + uuid.NewV4().String(),
 		URL:      "someurl" + uuid.NewV4().String(),
-		ContextInformation: workitem.Fields{
+		ContextInformation: account.ContextInformation{
 			"space":        uuid.NewV4(),
 			"last_visited": "http://www.google.com",
 			"myid":         "71f343e3-2bfa-4ec6-86d4-79b91476acfc",

@@ -4,18 +4,24 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/almighty/almighty-core/gormsupport"
+	"github.com/fabric8-services/fabric8-wit/gormsupport"
 	uuid "github.com/satori/go.uuid"
 )
 
 // Comment describes a single comment
 type Comment struct {
 	gormsupport.Lifecycle
-	ID        uuid.UUID `sql:"type:uuid default uuid_generate_v4()" gorm:"primary_key"` // This is the ID PK field
-	ParentID  string
-	CreatedBy uuid.UUID `sql:"type:uuid"` // Belongs To Identity
-	Body      string
-	Markup    string
+	ID       uuid.UUID `sql:"type:uuid default uuid_generate_v4()" gorm:"primary_key"` // This is the ID PK field
+	ParentID uuid.UUID `sql:"type:uuid"`
+	Creator  uuid.UUID `sql:"type:uuid"` // Belongs To Identity
+	Body     string
+	Markup   string
+}
+
+// TableName overrides the table name settings in Gorm to force a specific table name
+// in the database.
+func (m Comment) TableName() string {
+	return "comments"
 }
 
 // GetETagData returns the field values to use to generate the ETag

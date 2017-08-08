@@ -3,14 +3,15 @@ package remoteworkitem_test
 import (
 	"testing"
 
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/migration"
-	"github.com/almighty/almighty-core/remoteworkitem"
+	"context"
+
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/migration"
+	"github.com/fabric8-services/fabric8-wit/remoteworkitem"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"golang.org/x/net/context"
 )
 
 type trackerRepoBlackBoxTest struct {
@@ -89,5 +90,6 @@ func (s *trackerRepoBlackBoxTest) TestFaiLoadZeroID() {
 	}
 
 	_, err = s.repo.Load(context.Background(), "0")
-	require.IsType(s.T(), remoteworkitem.NotFoundError{}, err)
+	var errorType remoteworkitem.NotFoundError
+	require.IsType(s.T(), errorType, err)
 }

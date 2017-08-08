@@ -5,23 +5,23 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/app/test"
-	. "github.com/almighty/almighty-core/controller"
-	"github.com/almighty/almighty-core/gormapplication"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/jsonapi"
 	jwt "github.com/dgrijalva/jwt-go"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/app/test"
+	. "github.com/fabric8-services/fabric8-wit/controller"
+	"github.com/fabric8-services/fabric8-wit/gormapplication"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
 	"github.com/goadesign/goa"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 
-	testsupport "github.com/almighty/almighty-core/test"
-	almtoken "github.com/almighty/almighty-core/token"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	wittoken "github.com/fabric8-services/fabric8-wit/token"
 
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/remoteworkitem"
-	"github.com/almighty/almighty-core/resource"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/remoteworkitem"
+	"github.com/fabric8-services/fabric8-wit/resource"
 )
 
 type TestTrackerREST struct {
@@ -48,9 +48,9 @@ func (rest *TestTrackerREST) TearDownTest() {
 }
 
 func (rest *TestTrackerREST) SecuredController() (*goa.Service, *TrackerController) {
-	priv, _ := almtoken.ParsePrivateKey([]byte(almtoken.RSAPrivateKey))
+	priv, _ := wittoken.ParsePrivateKey([]byte(wittoken.RSAPrivateKey))
 
-	svc := testsupport.ServiceAsUser("Tracker-Service", almtoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
+	svc := testsupport.ServiceAsUser("Tracker-Service", wittoken.NewManagerWithPrivateKey(priv), testsupport.TestIdentity)
 	return svc, NewTrackerController(svc, rest.db, rest.RwiScheduler, rest.Configuration)
 }
 
@@ -71,7 +71,7 @@ func (rest *TestTrackerREST) TestUnauthorizeTrackerCUD() {
 }
 
 func getTrackerTestData(t *testing.T) []testSecureAPI {
-	privatekey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(almtoken.RSAPrivateKey))
+	privatekey, err := jwt.ParseRSAPrivateKeyFromPEM([]byte(wittoken.RSAPrivateKey))
 	if err != nil {
 		t.Fatal("Could not parse Key ", err)
 	}
@@ -238,7 +238,7 @@ func (rest *TestTrackerREST) TestGetTracker() {
 }
 
 // This test ensures that List does not return NIL items.
-// refer : https://github.com/almighty/almighty-core/issues/191
+// refer : https://github.com/fabric8-services/fabric8-wit/issues/191
 func (rest *TestTrackerREST) TestTrackerListItemsNotNil() {
 	t := rest.T()
 	resource.Require(t, resource.Database)
@@ -262,7 +262,7 @@ func (rest *TestTrackerREST) TestTrackerListItemsNotNil() {
 }
 
 // This test ensures that ID returned by Show is valid.
-// refer : https://github.com/almighty/almighty-core/issues/189
+// refer : https://github.com/fabric8-services/fabric8-wit/issues/189
 func (rest *TestTrackerREST) TestCreateTrackerValidId() {
 	t := rest.T()
 	resource.Require(t, resource.Database)

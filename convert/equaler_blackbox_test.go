@@ -3,8 +3,8 @@ package convert_test
 import (
 	"testing"
 
-	"github.com/almighty/almighty-core/convert"
-	"github.com/almighty/almighty-core/resource"
+	"github.com/fabric8-services/fabric8-wit/convert"
+	"github.com/fabric8-services/fabric8-wit/resource"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -17,10 +17,7 @@ var _ convert.Equaler = (*foo)(nil)
 
 func (f foo) Equal(u convert.Equaler) bool {
 	_, ok := u.(foo)
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
 
 func TestDummyEqualerEqual(t *testing.T) {

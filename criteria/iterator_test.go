@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/almighty/almighty-core/resource"
+	"github.com/fabric8-services/fabric8-wit/resource"
 )
 
 func TestIterator(t *testing.T) {
@@ -29,10 +29,7 @@ func TestIterator(t *testing.T) {
 	visited = []Expression{}
 	recorder = func(expr Expression) bool {
 		visited = append(visited, expr)
-		if expr == r {
-			return false
-		}
-		return true
+		return expr != r
 	}
 	IteratePostOrder(expr, recorder)
 	expected = []Expression{l, r}

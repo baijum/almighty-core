@@ -5,22 +5,27 @@ import (
 	"fmt"
 	"html"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/comment"
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/rendering"
-	"github.com/almighty/almighty-core/rest"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/comment"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/notification"
+	"github.com/fabric8-services/fabric8-wit/rendering"
+	"github.com/fabric8-services/fabric8-wit/rest"
+	"github.com/fabric8-services/fabric8-wit/space/authz"
+	"github.com/fabric8-services/fabric8-wit/workitem"
 	"github.com/goadesign/goa"
+	uuid "github.com/satori/go.uuid"
 )
 
 // CommentsController implements the comments resource.
 type CommentsController struct {
 	*goa.Controller
-	db     application.DB
-	config CommentsControllerConfiguration
+	db           application.DB
+	notification notification.Channel
+	config       CommentsControllerConfiguration
 }
 
 // CommentsControllerConfiguration the configuration for CommentsController
@@ -30,10 +35,20 @@ type CommentsControllerConfiguration interface {
 
 // NewCommentsController creates a comments controller.
 func NewCommentsController(service *goa.Service, db application.DB, config CommentsControllerConfiguration) *CommentsController {
+	return NewNotifyingCommentsController(service, db, &notification.DevNullChannel{}, config)
+}
+
+// NewNotifyingCommentsController creates a comments controller with notification broadcast.
+func NewNotifyingCommentsController(service *goa.Service, db application.DB, notificationChannel notification.Channel, config CommentsControllerConfiguration) *CommentsController {
+	n := notificationChannel
+	if n == nil {
+		n = &notification.DevNullChannel{}
+	}
 	return &CommentsController{
-		Controller: service.NewController("CommentsController"),
-		db:         db,
-		config:     config,
+		Controller:   service.NewController("CommentsController"),
+		db:           db,
+		notification: n,
+		config:       config,
 	}
 }
 
@@ -42,15 +57,15 @@ func (c *CommentsController) Show(ctx *app.ShowCommentsContext) error {
 	return application.Transactional(c.db, func(appl application.Application) error {
 		cmt, err := appl.Comments().Load(ctx, ctx.CommentID)
 		if err != nil {
-			jerrors, _ := jsonapi.ErrorToJSONAPIErrors(goa.ErrUnauthorized(err.Error()))
+			jerrors, _ := jsonapi.ErrorToJSONAPIErrors(ctx, goa.ErrUnauthorized(err.Error()))
 			return ctx.NotFound(jerrors)
 		}
-		return ctx.ConditionalEntity(*cmt, c.config.GetCacheControlComments, func() error {
+		return ctx.ConditionalRequest(*cmt, c.config.GetCacheControlComments, func() error {
 			res := &app.CommentSingle{}
 			// This code should change if others type of parents than WI are allowed
 			includeParentWorkItem, err := CommentIncludeParentWorkItem(ctx, appl, cmt)
 			if err != nil {
-				return errors.NewNotFoundError("comment parentID", cmt.ParentID)
+				return errors.NewNotFoundError("comment parentID", cmt.ParentID.String())
 			}
 			res.Data = ConvertComment(
 				ctx.RequestData,
@@ -67,22 +82,50 @@ func (c *CommentsController) Update(ctx *app.UpdateCommentsContext) error {
 	if err != nil {
 		return jsonapi.JSONErrorResponse(ctx, goa.ErrUnauthorized(err.Error()))
 	}
-
-	return application.Transactional(c.db, func(appl application.Application) error {
-		cm, err := appl.Comments().Load(ctx.Context, ctx.CommentID)
+	var cm *comment.Comment
+	var wi *workitem.WorkItem
+	var editorIsCreator bool
+	// Following transaction verifies if a user is allowed to update or not
+	err = application.Transactional(c.db, func(appl application.Application) error {
+		cm, err = appl.Comments().Load(ctx.Context, ctx.CommentID)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
-
-		if *identityID != cm.CreatedBy {
-			// need to use the goa.NewErrorClass() func as there is no native support for 403 in goa
-			// and it is not planned to be supported yet: https://github.com/goadesign/goa/pull/1030
-			return jsonapi.JSONErrorResponse(ctx, goa.NewErrorClass("forbidden", 403)("User is not the comment author"))
+		if *identityID == cm.Creator {
+			editorIsCreator = true
+			return nil
 		}
+		wi, err = appl.WorkItems().LoadByID(ctx.Context, cm.ParentID)
+		if err != nil {
+			return jsonapi.JSONErrorResponse(ctx, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// User is allowed to update if user is creator of the comment OR user is a space collaborator
+	if !editorIsCreator {
+		authorized, err := authz.Authorize(ctx, wi.SpaceID.String())
+		if err != nil {
+			return jsonapi.JSONErrorResponse(ctx, errors.NewUnauthorizedError(err.Error()))
+		}
+		if !authorized {
+			return jsonapi.JSONErrorResponse(ctx, errors.NewForbiddenError("user is not a space collaborator"))
+		}
+	}
+	result := c.performUpdate(ctx, cm, identityID)
+	if ctx.ResponseData.Status == 200 {
+		c.notification.Send(ctx, notification.NewCommentUpdated(cm.ID.String()))
+	}
+	return result
+}
 
+func (c *CommentsController) performUpdate(ctx *app.UpdateCommentsContext, cm *comment.Comment, identityID *uuid.UUID) error {
+	return application.Transactional(c.db, func(appl application.Application) error {
 		cm.Body = *ctx.Payload.Data.Attributes.Body
 		cm.Markup = rendering.NilSafeGetMarkup(ctx.Payload.Data.Attributes.Markup)
-		err = appl.Comments().Save(ctx.Context, cm, *identityID)
+		err := appl.Comments().Save(ctx.Context, cm, *identityID)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
@@ -90,7 +133,7 @@ func (c *CommentsController) Update(ctx *app.UpdateCommentsContext) error {
 		// This code should change if others type of parents than WI are allowed
 		includeParentWorkItem, err := CommentIncludeParentWorkItem(ctx, appl, cm)
 		if err != nil {
-			return errors.NewNotFoundError("comment parentID", cm.ParentID)
+			return errors.NewNotFoundError("comment parentID", cm.ParentID.String())
 		}
 
 		res := &app.CommentSingle{
@@ -106,19 +149,46 @@ func (c *CommentsController) Delete(ctx *app.DeleteCommentsContext) error {
 	if err != nil {
 		return jsonapi.JSONErrorResponse(ctx, goa.ErrUnauthorized(err.Error()))
 	}
-
-	return application.Transactional(c.db, func(appl application.Application) error {
-		cm, err := appl.Comments().Load(ctx.Context, ctx.CommentID)
+	var cm *comment.Comment
+	var wi *workitem.WorkItem
+	var userIsCreator bool
+	// Following transaction verifies if a user is allowed to delete or not
+	err = application.Transactional(c.db, func(appl application.Application) error {
+		cm, err = appl.Comments().Load(ctx.Context, ctx.CommentID)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
-		if *identityID != cm.CreatedBy {
-			// need to use the goa.NewErrorClass() func as there is no native support for 403 in goa
-			// and it is not planned to be supported yet: https://github.com/goadesign/goa/pull/1030
-			return jsonapi.JSONErrorResponse(ctx, goa.NewErrorClass("forbidden", 403)("User is not the comment author"))
+		if *identityID == cm.Creator {
+			userIsCreator = true
+			return nil
 		}
+		wi, err = appl.WorkItems().LoadByID(ctx.Context, cm.ParentID)
+		if err != nil {
+			return jsonapi.JSONErrorResponse(ctx, err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	// User is allowed to delete if user is creator of the comment OR user is a space collaborator
+	if userIsCreator {
+		return c.performDelete(ctx, cm, identityID)
+	}
 
-		err = appl.Comments().Delete(ctx.Context, cm.ID, *identityID)
+	authorized, err := authz.Authorize(ctx, wi.SpaceID.String())
+	if err != nil {
+		return jsonapi.JSONErrorResponse(ctx, errors.NewUnauthorizedError(err.Error()))
+	}
+	if !authorized {
+		return jsonapi.JSONErrorResponse(ctx, errors.NewForbiddenError("user is not a space collaborator"))
+	}
+	return c.performDelete(ctx, cm, identityID)
+}
+
+func (c *CommentsController) performDelete(ctx *app.DeleteCommentsContext, cm *comment.Comment, identityID *uuid.UUID) error {
+	return application.Transactional(c.db, func(appl application.Application) error {
+		err := appl.Comments().Delete(ctx.Context, cm.ID, *identityID)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
@@ -162,10 +232,12 @@ func ConvertCommentResourceID(request *goa.RequestData, comment comment.Comment,
 
 // ConvertComment converts between internal and external REST representation
 func ConvertComment(request *goa.RequestData, comment comment.Comment, additional ...CommentConvertFunc) *app.Comment {
-	selfURL := rest.AbsoluteURL(request, app.CommentsHref(comment.ID))
+	userType := APIStringTypeUser
+	creatorID := comment.Creator.String()
+	relatedURL := rest.AbsoluteURL(request, app.CommentsHref(comment.ID))
 	markup := rendering.NilSafeGetMarkup(&comment.Markup)
 	bodyRendered := rendering.RenderMarkupToHTML(html.EscapeString(comment.Body), comment.Markup)
-	relatedCreatorLink := rest.AbsoluteURL(request, fmt.Sprintf("%s/%s", usersEndpoint, comment.CreatedBy.String()))
+	relatedCreatorLink := rest.AbsoluteURL(request, fmt.Sprintf("%s/%s", usersEndpoint, creatorID))
 	c := &app.Comment{
 		Type: "comments",
 		ID:   &comment.ID,
@@ -177,10 +249,19 @@ func ConvertComment(request *goa.RequestData, comment comment.Comment, additiona
 			UpdatedAt:    &comment.UpdatedAt,
 		},
 		Relationships: &app.CommentRelations{
-			CreatedBy: &app.CommentCreatedBy{
+			Creator: &app.RelationGeneric{
+				Data: &app.GenericData{
+					Type: &userType,
+					ID:   &creatorID,
+					Links: &app.GenericLinks{
+						Related: &relatedCreatorLink,
+					},
+				},
+			},
+			CreatedBy: &app.CommentCreatedBy{ // Keep old API style until all cients are updated
 				Data: &app.IdentityRelationData{
-					Type: "identities",
-					ID:   &comment.CreatedBy,
+					Type: userType,
+					ID:   &comment.Creator,
 				},
 				Links: &app.GenericLinks{
 					Related: &relatedCreatorLink,
@@ -188,7 +269,8 @@ func ConvertComment(request *goa.RequestData, comment comment.Comment, additiona
 			},
 		},
 		Links: &app.GenericLinks{
-			Self: &selfURL,
+			Self:    &relatedURL,
+			Related: &relatedURL,
 		},
 	}
 	for _, add := range additional {
@@ -202,16 +284,9 @@ type HrefFunc func(id interface{}) string
 
 // CommentIncludeParentWorkItem includes a "parent" relation to a WorkItem
 func CommentIncludeParentWorkItem(ctx context.Context, appl application.Application, c *comment.Comment) (CommentConvertFunc, error) {
-	// NOTE: This function assumes that the comment is bound to a WorkItem. Therefore,
-	// we can extract the space out of this WI.
-	wi, err := appl.WorkItems().LoadByID(ctx, c.ParentID)
-	if err != nil {
-		return nil, err
-	}
-
 	return func(request *goa.RequestData, comment *comment.Comment, data *app.Comment) {
 		hrefFunc := func(obj interface{}) string {
-			return fmt.Sprintf(app.WorkitemHref(wi.SpaceID, "%v"), obj)
+			return fmt.Sprintf(app.WorkitemHref("%v"), obj)
 		}
 		CommentIncludeParent(request, comment, data, hrefFunc, APIStringTypeWorkItem)
 	}, nil
@@ -220,11 +295,11 @@ func CommentIncludeParentWorkItem(ctx context.Context, appl application.Applicat
 // CommentIncludeParent adds the "parent" relationship to this Comment
 func CommentIncludeParent(request *goa.RequestData, comment *comment.Comment, data *app.Comment, ref HrefFunc, parentType string) {
 	parentSelf := rest.AbsoluteURL(request, ref(comment.ParentID))
-
+	parentID := comment.ParentID.String()
 	data.Relationships.Parent = &app.RelationGeneric{
 		Data: &app.GenericData{
 			Type: &parentType,
-			ID:   &comment.ParentID,
+			ID:   &parentID,
 		},
 		Links: &app.GenericLinks{
 			Self: &parentSelf,

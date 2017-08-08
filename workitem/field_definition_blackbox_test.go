@@ -2,12 +2,11 @@ package workitem_test
 
 import (
 	"encoding/json"
-	"fmt"
 	"reflect"
 	"testing"
 
-	"github.com/almighty/almighty-core/resource"
-	. "github.com/almighty/almighty-core/workitem"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	. "github.com/fabric8-services/fabric8-wit/workitem"
 )
 
 func TestListFieldDefMarshalling(t *testing.T) {
@@ -28,7 +27,7 @@ func TestListFieldDefMarshalling(t *testing.T) {
 		return
 	}
 
-	fmt.Printf("bytes are " + string(bytes))
+	t.Logf("bytes are ", string(bytes))
 	unmarshalled := FieldDefinition{}
 	json.Unmarshal(bytes, &unmarshalled)
 

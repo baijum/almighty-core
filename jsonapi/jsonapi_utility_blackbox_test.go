@@ -1,15 +1,17 @@
 package jsonapi_test
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strconv"
 	"testing"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/resource"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	errs "github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +23,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	var httpStatus int
 
 	// test not found error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(errors.NewNotFoundError("foo", "bar"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, errors.NewNotFoundError("foo", "bar"))
 	require.Equal(t, http.StatusNotFound, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)
@@ -29,7 +31,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	require.Equal(t, strconv.Itoa(httpStatus), *jerr.Status)
 
 	// test not found error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(errors.NewConversionError("foo"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, errors.NewConversionError("foo"))
 	require.Equal(t, http.StatusBadRequest, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)
@@ -37,7 +39,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	require.Equal(t, strconv.Itoa(httpStatus), *jerr.Status)
 
 	// test bad parameter error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(errors.NewBadParameterError("foo", "bar"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, errors.NewBadParameterError("foo", "bar"))
 	require.Equal(t, http.StatusBadRequest, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)
@@ -45,7 +47,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	require.Equal(t, strconv.Itoa(httpStatus), *jerr.Status)
 
 	// test internal server error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(errors.NewInternalError("foo"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, errors.NewInternalError(context.Background(), errs.New("foo")))
 	require.Equal(t, http.StatusInternalServerError, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)
@@ -53,7 +55,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	require.Equal(t, strconv.Itoa(httpStatus), *jerr.Status)
 
 	// test unauthorized error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(errors.NewUnauthorizedError("foo"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, errors.NewUnauthorizedError("foo"))
 	require.Equal(t, http.StatusUnauthorized, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)
@@ -61,7 +63,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	require.Equal(t, strconv.Itoa(httpStatus), *jerr.Status)
 
 	// test forbidden error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(errors.NewForbiddenError("foo"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, errors.NewForbiddenError("foo"))
 	require.Equal(t, http.StatusForbidden, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)
@@ -69,7 +71,7 @@ func TestErrorToJSONAPIError(t *testing.T) {
 	require.Equal(t, strconv.Itoa(httpStatus), *jerr.Status)
 
 	// test unspecified error
-	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(fmt.Errorf("foobar"))
+	jerr, httpStatus = jsonapi.ErrorToJSONAPIError(nil, fmt.Errorf("foobar"))
 	require.Equal(t, http.StatusInternalServerError, httpStatus)
 	require.NotNil(t, jerr.Code)
 	require.NotNil(t, jerr.Status)

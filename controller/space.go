@@ -4,17 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/area"
-	"github.com/almighty/almighty-core/auth"
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/iteration"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/rest"
-	"github.com/almighty/almighty-core/space"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/area"
+	"github.com/fabric8-services/fabric8-wit/auth"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/iteration"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/rest"
+	"github.com/fabric8-services/fabric8-wit/space"
 	"github.com/goadesign/goa"
 	errs "github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
@@ -67,6 +67,9 @@ func (c *SpaceController) Create(ctx *app.CreateSpaceContext) error {
 	reqSpace := ctx.Payload.Data
 	spaceName := *reqSpace.Attributes.Name
 	spaceID := uuid.NewV4()
+	if reqSpace.ID != nil {
+		spaceID = *reqSpace.ID
+	}
 
 	var rSpace *space.Space
 	err = application.Transactional(c.db, func(appl application.Application) error {
@@ -243,31 +246,30 @@ func (c *SpaceController) List(ctx *app.ListSpaceContext) error {
 
 // Show runs the show action.
 func (c *SpaceController) Show(ctx *app.ShowSpaceContext) error {
-	var result app.SpaceSingle
-	txnErr := application.Transactional(c.db, func(appl application.Application) error {
+	return application.Transactional(c.db, func(appl application.Application) error {
 		s, err := appl.Spaces().Load(ctx.Context, ctx.SpaceID)
 		if err != nil {
-			return err
+			log.Error(ctx, map[string]interface{}{
+				"err":      err,
+				"space_id": ctx.SpaceID,
+			}, "unable to load the space by ID")
+			return jsonapi.JSONErrorResponse(ctx, err)
 		}
-		entityErr := ctx.ConditionalEntity(*s, c.config.GetCacheControlSpaces, func() error {
+		return ctx.ConditionalRequest(*s, c.config.GetCacheControlSpaces, func() error {
 			spaceData, err := ConvertSpaceFromModel(ctx.Context, c.db, ctx.RequestData, *s)
 			if err != nil {
-				return err
+				log.Error(ctx, map[string]interface{}{
+					"err":      err,
+					"space_id": ctx.SpaceID,
+				}, "unable to convert the space object")
+				return jsonapi.JSONErrorResponse(ctx, err)
 			}
-			result = app.SpaceSingle{
+			result := &app.SpaceSingle{
 				Data: spaceData,
 			}
-			return nil
+			return ctx.OK(result)
 		})
-		if entityErr != nil {
-			return entityErr
-		}
-		return nil
 	})
-	if txnErr != nil {
-		return jsonapi.JSONErrorResponse(ctx, txnErr)
-	}
-	return ctx.OK(&result)
 }
 
 // Update runs the update action.
@@ -402,7 +404,7 @@ func ConvertSpacesFromModel(ctx context.Context, db application.DB, request *goa
 
 // ConvertSpaceFromModel converts between internal and external REST representation
 func ConvertSpaceFromModel(ctx context.Context, db application.DB, request *goa.RequestData, sp space.Space, additional ...SpaceConvertFunc) (*app.Space, error) {
-	selfURL := rest.AbsoluteURL(request, app.SpaceHref(sp.ID))
+	relatedURL := rest.AbsoluteURL(request, app.SpaceHref(sp.ID))
 	spaceIDStr := sp.ID.String()
 	relatedIterationList := rest.AbsoluteURL(request, fmt.Sprintf("/api/spaces/%s/iterations", spaceIDStr))
 	relatedAreaList := rest.AbsoluteURL(request, fmt.Sprintf("/api/spaces/%s/areas", spaceIDStr))
@@ -430,7 +432,8 @@ func ConvertSpaceFromModel(ctx context.Context, db application.DB, request *goa.
 			Version:     &sp.Version,
 		},
 		Links: &app.GenericLinksForSpace{
-			Self: &selfURL,
+			Self:    &relatedURL,
+			Related: &relatedURL,
 			Backlog: &app.BacklogGenericLink{
 				Self: &relatedBacklogList,
 				Meta: &app.BacklogLinkMeta{TotalCount: count},

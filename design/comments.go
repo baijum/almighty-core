@@ -60,7 +60,8 @@ var createCommentAttributes = a.Type("CreateCommentAttributes", func() {
 })
 
 var commentRelationships = a.Type("CommentRelations", func() {
-	a.Attribute("created-by", commentCreatedBy, "This defines the created by relation")
+	a.Attribute("creator", relationGeneric, "This defines the creator of the comment")
+	a.Attribute("created-by", commentCreatedBy, "DEPRECATED. This defines the creator of the comment.")
 	a.Attribute("parent", relationGeneric, "This defines the owning resource of the comment")
 })
 
@@ -207,7 +208,7 @@ var _ = a.Resource("work_item_comments", func() {
 		a.Routing(
 			a.POST("comments"),
 		)
-		a.Description("List comments associated with the given work item")
+		a.Description("Creates a comment associated with the given work item")
 		a.Response(d.OK, func() {
 			a.Media(commentSingle)
 		})

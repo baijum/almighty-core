@@ -1,9 +1,7 @@
 package log
 
 import (
-	"golang.org/x/net/context"
-
-	tokencontext "github.com/almighty/almighty-core/login/tokencontext"
+	"context"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/goadesign/goa/client"
@@ -14,11 +12,6 @@ import (
 
 // extractIdentityID obtains the identity ID out of the authentication context
 func extractIdentityID(ctx context.Context) (string, error) {
-	tm := tokencontext.ReadTokenManagerFromContext(ctx)
-	if tm == nil {
-		return "", errors.New("Missing token manager")
-	}
-
 	token := goajwt.ContextJWT(ctx)
 	if token == nil {
 		return "", errors.New("Missing token")

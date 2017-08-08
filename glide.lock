@@ -1,5 +1,5 @@
-hash: 3e9f1b6af7274e8d50e57500f92f1374c63cce5e765993d8649e03350936560c
-updated: 2017-04-17T23:07:16.622277679+02:00
+hash: 3485ba9192d8fa45e0ff6c2f460c338020158011ba2d3a3bce3e0b67d80fe6b2
+updated: 2017-07-31T13:11:16.984432662+02:00
 imports:
 - name: bitbucket.org/pkg/inflect
   version: 8961c3750a47b8c0b3e118d52513b97adf85a7e8
@@ -22,7 +22,7 @@ imports:
 - name: github.com/dimfeld/httppath
   version: c8e499c3ef3c3e272ed8bdcc1ccf39f73c88debc
 - name: github.com/dimfeld/httptreemux
-  version: 86f7c217d9043ebc6adfd8e2ed04a0bb1e1db651
+  version: 13dde8a00d96b369e7398490fd8a3af9ca114b84
 - name: github.com/dnaeon/go-vcr
   version: 9d71b8a6df86e00127f96bc8dabc09856ab8afdb
   subpackages:
@@ -32,8 +32,12 @@ imports:
   version: 9a6736ed45b44bf3835afeebb3034b57ed329f3e
   subpackages:
   - go-bindata-assetfs
-- name: github.com/fabric8io/fabric8-init-tenant
-  version: ccdddb03d80b9673229bd21ce6b402ecf6af30e8
+- name: github.com/fabric8-services/fabric8-notification
+  version: a3c7adb29a8ec1e0aab2af4f9a2d3c852d0daaef
+  subpackages:
+  - design
+- name: github.com/fabric8-services/fabric8-tenant
+  version: 869b06d634f744e3bb171982b54950989f260c34
   subpackages:
   - design
 - name: github.com/fatih/structs
@@ -43,7 +47,7 @@ imports:
 - name: github.com/fzipp/gocyclo
   version: 6acd4345c835499920e8426c7e4e8d7a34f1bb83
 - name: github.com/goadesign/goa
-  version: be1e8b9a2614909d8805079ebd1c947778170c0e
+  version: 58f3177f36f2c50ee6119da92795e48bac6d6243
   vcs: git
   subpackages:
   - client
@@ -113,7 +117,7 @@ imports:
 - name: github.com/lsegal/gucumber
   version: 71608e2f6e76fd4da5b09a376aeec7a5c0b5edbc
 - name: github.com/magiconair/properties
-  version: f917359f079a3759162704eaa8caeec3d01d9f91
+  version: be5ece7dd465ab0765a9682137865547526d1dfb
 - name: github.com/manveru/faker
   version: 717f7cf83fb78669bfab612749c2e8ff63d5be11
 - name: github.com/mattn/go-colorable
@@ -142,8 +146,14 @@ imports:
   version: b024fc5ea0e34bc3f83d9941c8d60b0622bfaca4
 - name: github.com/russross/blackfriday
   version: 5f33e7b7878355cd2b7e6b8eefc48a5472c69f70
+- name: github.com/jstemmer/go-junit-report
+  version: 15422cf504f9dc030386499a5c68053a38763e58
 - name: github.com/satori/go.uuid
   version: b061729afc07e77a8aa4fad0a2fd840958f1942a
+- name: github.com/sergi/go-diff
+  version: feef008d51ad2b3778f85d387ccf91735543008d
+  subpackages:
+  - diffmatchpatch
 - name: github.com/shurcooL/sanitized_anchor_name
   version: 1dba4b3954bc059efc3991ec364f9f9a35f597d2
 - name: github.com/Sirupsen/logrus

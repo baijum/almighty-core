@@ -1,19 +1,21 @@
 package area
 
 import (
-	"fmt"
+	"context"
 	"time"
 
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/gormsupport"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/path"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/path"
+
+	"fmt"
+
 	"github.com/goadesign/goa"
 	"github.com/jinzhu/gorm"
 	errs "github.com/pkg/errors"
-
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/net/context"
 )
 
 const APIStringTypeAreas = "areas"
@@ -40,12 +42,13 @@ func (m Area) GetLastModified() time.Time {
 
 // TableName overrides the table name settings in Gorm to force a specific table name
 // in the database.
-func (m *GormAreaRepository) TableName() string {
+func (m Area) TableName() string {
 	return "areas"
 }
 
 // Repository describes interactions with Areas
 type Repository interface {
+	repository.Exister
 	Create(ctx context.Context, u *Area) error
 	List(ctx context.Context, spaceID uuid.UUID) ([]Area, error)
 	Load(ctx context.Context, id uuid.UUID) (*Area, error)
@@ -73,7 +76,13 @@ func (m *GormAreaRepository) Create(ctx context.Context, u *Area) error {
 	if err != nil {
 		// ( name, spaceID ,path ) needs to be unique
 		if gormsupport.IsUniqueViolation(err, "areas_name_space_id_path_unique") {
-			return errors.NewBadParameterError("name & space_id & path", u.Name+" & "+u.SpaceID.String()+" & "+u.Path.String()).Expected("unique")
+			log.Error(ctx, map[string]interface{}{
+				"err":      err,
+				"name":     u.Name,
+				"path":     u.Path,
+				"space_id": u.SpaceID,
+			}, "unable to create child area because an area in the same path already exists")
+			return errors.NewDataConflictError(fmt.Sprintf("area already exists with name = %s , space_id = %s , path = %s ", u.Name, u.SpaceID.String(), u.Path.String()))
 		}
 		log.Error(ctx, map[string]interface{}{}, "error adding Area: %s", err.Error())
 		return err
@@ -102,9 +111,15 @@ func (m *GormAreaRepository) Load(ctx context.Context, id uuid.UUID) (*Area, err
 		return nil, errors.NewNotFoundError("Area", id.String())
 	}
 	if tx.Error != nil {
-		return nil, errors.NewInternalError(tx.Error.Error())
+		return nil, errors.NewInternalError(ctx, tx.Error)
 	}
 	return &obj, nil
+}
+
+// CheckExists returns nil if the given ID exists otherwise returns an error
+func (m *GormAreaRepository) CheckExists(ctx context.Context, id string) error {
+	defer goa.MeasureSince([]string{"goa", "db", "area", "exists"}, time.Now())
+	return repository.CheckExists(ctx, m.db, Area{}.TableName(), id)
 }
 
 // Load multiple areas
@@ -117,7 +132,7 @@ func (m *GormAreaRepository) LoadMultiple(ctx context.Context, ids []uuid.UUID) 
 	}
 	tx := m.db.Find(&objs)
 	if tx.Error != nil {
-		return nil, errors.NewInternalError(tx.Error.Error())
+		return nil, errors.NewInternalError(ctx, tx.Error)
 	}
 	return objs, nil
 }
@@ -132,7 +147,7 @@ func (m *GormAreaRepository) ListChildren(ctx context.Context, parentArea *Area)
 		return nil, errors.NewNotFoundError("Area", parentArea.ID.String())
 	}
 	if tx.Error != nil {
-		return nil, errors.NewInternalError(tx.Error.Error())
+		return nil, errors.NewInternalError(ctx, tx.Error)
 	}
 	return objs, nil
 }
@@ -145,7 +160,7 @@ func (m *GormAreaRepository) Root(ctx context.Context, spaceID uuid.UUID) (*Area
 	parentPathOfRootArea := path.Path{}
 	rootArea, err := m.Query(FilterBySpaceID(spaceID), FilterByPath(parentPathOfRootArea))
 	if len(rootArea) != 1 {
-		return nil, errors.NewInternalError(fmt.Sprintf("Single Root area not found for space %s", spaceID.String()))
+		return nil, errors.NewInternalError(ctx, errs.Errorf("single Root area not found for space %s", spaceID))
 	}
 	if err != nil {
 		return nil, err
@@ -158,7 +173,7 @@ func (m *GormAreaRepository) Query(funcs ...func(*gorm.DB) *gorm.DB) ([]Area, er
 	defer goa.MeasureSince([]string{"goa", "db", "area", "query"}, time.Now())
 	var objs []Area
 
-	err := m.db.Scopes(funcs...).Table(m.TableName()).Find(&objs).Error
+	err := m.db.Scopes(funcs...).Table(Area{}.TableName()).Find(&objs).Error
 	if err != nil && err != gorm.ErrRecordNotFound {
 		return nil, errs.WithStack(err)
 	}

@@ -7,22 +7,23 @@ import (
 	"net/url"
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
+
 	"golang.org/x/oauth2"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/app"
-	config "github.com/almighty/almighty-core/configuration"
-	"github.com/almighty/almighty-core/gormapplication"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	. "github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/migration"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/app"
+	config "github.com/fabric8-services/fabric8-wit/configuration"
+	"github.com/fabric8-services/fabric8-wit/gormapplication"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	. "github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/migration"
 	goajwt "github.com/goadesign/goa/middleware/security/jwt"
 
-	"github.com/almighty/almighty-core/resource"
-	"github.com/almighty/almighty-core/token"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/token"
 	"github.com/goadesign/goa"
 	"github.com/goadesign/goa/uuid"
 	_ "github.com/lib/pq"
@@ -108,9 +109,9 @@ func (s *serviceBlackBoxTest) TestKeycloakAuthorizationRedirect() {
 		panic("invalid test " + err.Error()) // bug
 	}
 
-	// The user clicks login while on ALM UI.
-	// Therefore the referer would be an ALM URL.
-	refererUrl := "https://alm-url.example.org/path"
+	// The user clicks login while on WIT UI.
+	// Therefore the referer would be an WIT URL.
+	refererUrl := "https://wit-url.example.org/path"
 	req.Header.Add("referer", refererUrl)
 
 	prms := url.Values{}
@@ -122,7 +123,7 @@ func (s *serviceBlackBoxTest) TestKeycloakAuthorizationRedirect() {
 	}
 
 	r := &goa.RequestData{
-		Request: &http.Request{Host: "demo.api.almighty.io"},
+		Request: &http.Request{Host: "demo.api.openshift.io"},
 	}
 	brokerEndpoint, err := s.configuration.GetKeycloakEndpointBroker(r)
 	require.Nil(s.T(), err)
@@ -298,10 +299,8 @@ func keycloakLinkRedirect(s *serviceBlackBoxTest, provider string, redirect stri
 	req.Header.Add("referer", referrerUrl)
 
 	ss := uuid.NewV4().String()
-	cs := uuid.NewV4().String()
 	claims := jwt.MapClaims{}
 	claims["session_state"] = &ss
-	claims["client_session"] = &cs
 	token := &jwt.Token{Claims: claims}
 	ctx := goajwt.WithJWT(context.Background(), token)
 	goaCtx := goa.NewContext(goa.WithAction(ctx, "LinkTest"), rw, req, parameters)
@@ -338,7 +337,6 @@ func keycloakLinkCallbackRedirect(s *serviceBlackBoxTest, next string) {
 	parameters := url.Values{}
 	parameters.Add("state", uuid.NewV4().String())
 	parameters.Add("sessionState", uuid.NewV4().String())
-	parameters.Add("clientSession", uuid.NewV4().String())
 	if next != "" {
 		parameters.Add("next", next)
 	}
@@ -387,8 +385,8 @@ func (s *serviceBlackBoxTest) TestInvalidState() {
 	// The OAuth 'state' is sent as a query parameter by calling /api/login/authorize?code=_SOME_CODE_&state=_SOME_STATE_
 	// The request originates from Keycloak after a valid authorization by the end user.
 	// This is not where the redirection should happen on failure.
-	refererKeyclaokUrl := "https://keycloak-url.example.org/path-of-login"
-	req.Header.Add("referer", refererKeyclaokUrl)
+	refererKeycloakUrl := "https://keycloak-url.example.org/path-of-login"
+	req.Header.Add("referer", refererKeycloakUrl)
 
 	prms := url.Values{
 		"state": {},
@@ -400,7 +398,7 @@ func (s *serviceBlackBoxTest) TestInvalidState() {
 	require.Nil(s.T(), err)
 
 	r := &goa.RequestData{
-		Request: &http.Request{Host: "demo.api.almighty.io"},
+		Request: &http.Request{Host: "demo.api.openshift.io"},
 	}
 	brokerEndpoint, err := s.configuration.GetKeycloakEndpointBroker(r)
 	require.Nil(s.T(), err)
@@ -415,7 +413,7 @@ func (s *serviceBlackBoxTest) TestInvalidOAuthAuthorizationCode() {
 	// an invalid OAuth2.0 code, the access token exchange
 	// fails. In such a scenario, there is response redirection
 	// to the valid referer, ie, the URL where the request originated from.
-	// Currently, this should be something like https://demo.almighty.org/somepage/
+	// Currently, this should be something like https://demo.openshift.io/somepage/
 
 	resource.Require(s.T(), resource.Database)
 
@@ -429,9 +427,9 @@ func (s *serviceBlackBoxTest) TestInvalidOAuthAuthorizationCode() {
 		panic("invalid test " + err.Error()) // bug
 	}
 
-	// The user clicks login while on ALM UI.
-	// Therefore the referer would be an ALM URL.
-	refererUrl := "https://alm-url.example.org/path"
+	// The user clicks login while on WIT UI.
+	// Therefore the referer would be an WIT URL.
+	refererUrl := "https://wit-url.example.org/path"
 	req.Header.Add("referer", refererUrl)
 
 	prms := url.Values{}
@@ -441,7 +439,7 @@ func (s *serviceBlackBoxTest) TestInvalidOAuthAuthorizationCode() {
 	require.Nil(s.T(), err)
 
 	r := &goa.RequestData{
-		Request: &http.Request{Host: "demo.api.almighty.io"},
+		Request: &http.Request{Host: "demo.api.openshift.io"},
 	}
 	brokerEndpoint, err := s.configuration.GetKeycloakEndpointBroker(r)
 	require.Nil(s.T(), err)
@@ -488,7 +486,7 @@ func (s *serviceBlackBoxTest) TestInvalidOAuthAuthorizationCode() {
 	require.Nil(s.T(), err)
 
 	allQueryParameters = locationUrl.Query()
-	assert.Equal(s.T(), 307, rw.Code) // redirect to ALM page where login was clicked.
+	assert.Equal(s.T(), 307, rw.Code) // redirect to WIT page where login was clicked.
 	// Avoiding panics.
 	assert.NotNil(s.T(), allQueryParameters)
 	assert.NotNil(s.T(), allQueryParameters["error"])

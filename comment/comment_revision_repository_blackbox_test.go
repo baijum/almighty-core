@@ -4,14 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/comment"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/migration"
-	"github.com/almighty/almighty-core/rendering"
-	"github.com/almighty/almighty-core/resource"
-	testsupport "github.com/almighty/almighty-core/test"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/comment"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/migration"
+	"github.com/fabric8-services/fabric8-wit/rendering"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	uuid "github.com/satori/go.uuid"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -48,13 +49,13 @@ func (s *revisionRepositoryBlackBoxTest) SetupTest() {
 	s.clean = cleaner.DeleteCreatedEntities(s.DB)
 	testIdentity1, err := testsupport.CreateTestIdentity(s.DB, "jdoe1", "test")
 	require.Nil(s.T(), err)
-	s.testIdentity1 = testIdentity1
+	s.testIdentity1 = *testIdentity1
 	testIdentity2, err := testsupport.CreateTestIdentity(s.DB, "jdoe2", "test")
 	require.Nil(s.T(), err)
-	s.testIdentity2 = testIdentity2
+	s.testIdentity2 = *testIdentity2
 	testIdentity3, err := testsupport.CreateTestIdentity(s.DB, "jdoe3", "test")
 	require.Nil(s.T(), err)
-	s.testIdentity3 = testIdentity3
+	s.testIdentity3 = *testIdentity3
 }
 
 func (s *revisionRepositoryBlackBoxTest) TearDownTest() {
@@ -64,7 +65,7 @@ func (s *revisionRepositoryBlackBoxTest) TearDownTest() {
 func (s *revisionRepositoryBlackBoxTest) TestStoreCommentRevisions() {
 	// given
 	// create a comment
-	c := newComment("A", "Body", rendering.SystemMarkupMarkdown)
+	c := newComment(uuid.NewV4(), "Body", rendering.SystemMarkupMarkdown)
 	err := s.repository.Create(context.Background(), c, s.testIdentity1.ID)
 	require.Nil(s.T(), err)
 	// modify the comment

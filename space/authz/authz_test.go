@@ -3,27 +3,31 @@ package authz_test
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"testing"
 	"time"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/area"
-	"github.com/almighty/almighty-core/auth"
-	"github.com/almighty/almighty-core/codebase"
-	"github.com/almighty/almighty-core/comment"
-	"github.com/almighty/almighty-core/iteration"
-	"github.com/almighty/almighty-core/resource"
-	"github.com/almighty/almighty-core/space"
-	"github.com/almighty/almighty-core/space/authz"
-	testsupport "github.com/almighty/almighty-core/test"
-	almtoken "github.com/almighty/almighty-core/token"
-	"github.com/almighty/almighty-core/workitem"
-	"github.com/almighty/almighty-core/workitem/link"
-	"github.com/satori/go.uuid"
+	config "github.com/fabric8-services/fabric8-wit/configuration"
+	"github.com/goadesign/goa"
+
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/area"
+	"github.com/fabric8-services/fabric8-wit/auth"
+	"github.com/fabric8-services/fabric8-wit/codebase"
+	"github.com/fabric8-services/fabric8-wit/comment"
+	"github.com/fabric8-services/fabric8-wit/iteration"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/space"
+	"github.com/fabric8-services/fabric8-wit/space/authz"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	wittoken "github.com/fabric8-services/fabric8-wit/token"
+	"github.com/fabric8-services/fabric8-wit/workitem"
+	"github.com/fabric8-services/fabric8-wit/workitem/link"
+
+	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	netcontext "golang.org/x/net/context"
 )
 
 var (
@@ -31,13 +35,14 @@ var (
 )
 
 func TestAuthz(t *testing.T) {
-	resource.Require(t, resource.UnitTest)
+	resource.Require(t, resource.Remote)
 	suite.Run(t, new(TestAuthzSuite))
 }
 
 type TestAuthzSuite struct {
 	suite.Suite
-	authzService *authz.KeycloakAuthzService
+	configuration *config.ConfigurationData
+	authzService  *authz.KeycloakAuthzService
 }
 
 func (s *TestAuthzSuite) SetupSuite() {
@@ -46,7 +51,8 @@ func (s *TestAuthzSuite) SetupSuite() {
 		panic(fmt.Errorf("Failed to setup the configuration: %s", err.Error()))
 	}
 	var resource *space.Resource
-	s.authzService = authz.NewAuthzService(nil, &db{app{resource: resource}})
+	s.configuration, err = config.GetConfigurationData()
+	s.authzService = authz.NewAuthzService(s.configuration, &db{app{resource: resource}})
 }
 
 func (s *TestAuthzSuite) TestFailsIfNoTokenInContext() {
@@ -58,7 +64,7 @@ func (s *TestAuthzSuite) TestFailsIfNoTokenInContext() {
 
 func (s *TestAuthzSuite) TestUserAmongSpaceCollaboratorsOK() {
 	spaceID := uuid.NewV4().String()
-	authzPayload := authz.AuthorizationPayload{Permissions: []authz.Permissions{{ResourceSetName: &spaceID}}}
+	authzPayload := auth.AuthorizationPayload{Permissions: []auth.Permissions{{ResourceSetName: &spaceID}}}
 	ok := s.checkPermissions(authzPayload, spaceID)
 	require.True(s.T(), ok)
 }
@@ -66,20 +72,24 @@ func (s *TestAuthzSuite) TestUserAmongSpaceCollaboratorsOK() {
 func (s *TestAuthzSuite) TestUserIsNotAmongSpaceCollaboratorsFails() {
 	spaceID1 := uuid.NewV4().String()
 	spaceID2 := uuid.NewV4().String()
-	authzPayload := authz.AuthorizationPayload{Permissions: []authz.Permissions{{ResourceSetName: &spaceID1}}}
+	authzPayload := auth.AuthorizationPayload{Permissions: []auth.Permissions{{ResourceSetName: &spaceID1}}}
 	ok := s.checkPermissions(authzPayload, spaceID2)
 	require.False(s.T(), ok)
 }
 
-func (s *TestAuthzSuite) checkPermissions(authzPayload authz.AuthorizationPayload, spaceID string) bool {
+func (s *TestAuthzSuite) checkPermissions(authzPayload auth.AuthorizationPayload, spaceID string) bool {
 	resource := &space.Resource{}
 	authzService := authz.NewAuthzService(nil, &db{app{resource: resource}})
-	priv, _ := almtoken.ParsePrivateKey([]byte(almtoken.RSAPrivateKey))
+	priv, _ := wittoken.ParsePrivateKey([]byte(wittoken.RSAPrivateKey))
 	testIdentity := testsupport.TestIdentity
-	svc := testsupport.ServiceAsUserWithAuthz("SpaceAuthz-Service", almtoken.NewManagerWithPrivateKey(priv), priv, testIdentity, authzPayload)
+	svc := testsupport.ServiceAsUserWithAuthz("SpaceAuthz-Service", wittoken.NewManagerWithPrivateKey(priv), priv, testIdentity, authzPayload)
 	resource.UpdatedAt = time.Now()
-
-	ok, err := authzService.Authorize(svc.Context, "", spaceID)
+	r := &goa.RequestData{
+		Request: &http.Request{Host: "api.example.org"},
+	}
+	entitlementEndpoint, err := s.configuration.GetKeycloakEndpointEntitlement(r)
+	require.Nil(s.T(), err)
+	ok, err := authzService.Authorize(svc.Context, entitlementEndpoint, spaceID)
 	require.Nil(s.T(), err)
 	return ok
 }
@@ -180,23 +190,27 @@ func (a *app) Codebases() codebase.Repository {
 	return nil
 }
 
-func (r *resourceRepo) Create(ctx netcontext.Context, s *space.Resource) (*space.Resource, error) {
+func (r *resourceRepo) Create(ctx context.Context, s *space.Resource) (*space.Resource, error) {
 	return nil, nil
 }
 
-func (r *resourceRepo) Save(ctx netcontext.Context, s *space.Resource) (*space.Resource, error) {
+func (r *resourceRepo) Save(ctx context.Context, s *space.Resource) (*space.Resource, error) {
 	return nil, nil
 }
 
-func (r *resourceRepo) Load(ctx netcontext.Context, ID uuid.UUID) (*space.Resource, error) {
+func (r *resourceRepo) Load(ctx context.Context, ID uuid.UUID) (*space.Resource, error) {
 	return nil, nil
 }
 
-func (r *resourceRepo) Delete(ctx netcontext.Context, ID uuid.UUID) error {
+func (r *resourceRepo) Delete(ctx context.Context, ID uuid.UUID) error {
 	return nil
 }
 
-func (r *resourceRepo) LoadBySpace(ctx netcontext.Context, spaceID *uuid.UUID) (*space.Resource, error) {
+func (r *resourceRepo) CheckExists(ctx context.Context, ID string) error {
+	return nil
+}
+
+func (r *resourceRepo) LoadBySpace(ctx context.Context, spaceID *uuid.UUID) (*space.Resource, error) {
 	resource := &space.Resource{}
 	past := time.Now().Unix() - 1000
 	resource.UpdatedAt = time.Unix(past, 0)

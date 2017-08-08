@@ -35,8 +35,8 @@ docker-image-deploy:
 .PHONY: docker-publish-deploy
 ## Tags the runnable image and pushes it to the docker hub.
 docker-publish-deploy:
-	docker tag $(DOCKER_IMAGE_DEPLOY) almightycore/almighty-core:latest
-	docker push almightycore/almighty-core:latest
+	docker tag $(DOCKER_IMAGE_DEPLOY) fabric8-services/fabric8-wit:latest
+	docker push fabric8-services/fabric8-wit:latest
 
 .PHONY: docker-build-dir
 ## Creates the docker build directory.
@@ -97,7 +97,7 @@ endif
 
 # The targets in the following list all depend on a running database container.
 # Make sure you run "make integration-test-env-prepare" before you run any of these targets.
-DB_DEPENDENT_DOCKER_TARGETS = docker-test-migration docker-test-integration docker-test-integration-no-coverage docker-coverage-all
+DB_DEPENDENT_DOCKER_TARGETS = docker-test-migration docker-test-integration docker-test-integration-no-coverage docker-coverage-all docker-test-integration-benchmark
 
 $(DB_DEPENDENT_DOCKER_TARGETS):
 	$(eval makecommand:=$(subst docker-,,$@))
@@ -107,8 +107,8 @@ endif
 ifeq ($(strip $(shell docker inspect --format '{{ .NetworkSettings.IPAddress }}' make_postgres_integration_test_1 2>/dev/null)),)
 	$(error Failed to find PostgreSQL container. Try running "make integration-test-env-prepare")
 endif
-	$(eval ALMIGHTY_POSTGRES_HOST := $(shell docker inspect --format '{{ .NetworkSettings.IPAddress }}' make_postgres_integration_test_1 2>/dev/null))
-	docker exec -t $(DOCKER_RUN_INTERACTIVE_SWITCH) "$(DOCKER_CONTAINER_NAME)" bash -ec 'export ALMIGHTY_POSTGRES_HOST=$(ALMIGHTY_POSTGRES_HOST); make $(makecommand)'
+	$(eval F8_POSTGRES_HOST := $(shell docker inspect --format '{{ .NetworkSettings.IPAddress }}' make_postgres_integration_test_1 2>/dev/null))
+	docker exec -t $(DOCKER_RUN_INTERACTIVE_SWITCH) "$(DOCKER_CONTAINER_NAME)" bash -ec 'export F8_POSTGRES_HOST=$(F8_POSTGRES_HOST); make $(makecommand)'
 
 # This is a wildcard target to let you call any make target from the normal makefile
 # but it will run inside the docker container. This target will only get executed if

@@ -3,21 +3,21 @@ package controller
 import (
 	"testing"
 
-	"golang.org/x/net/context"
+	"context"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/gormapplication"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/iteration"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/migration"
-	"github.com/almighty/almighty-core/resource"
-	"github.com/almighty/almighty-core/space"
-	testsupport "github.com/almighty/almighty-core/test"
-	"github.com/almighty/almighty-core/workitem"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/gormapplication"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/iteration"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/migration"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/space"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
+	"github.com/fabric8-services/fabric8-wit/workitem"
 
 	"github.com/goadesign/goa"
 	uuid "github.com/satori/go.uuid"
@@ -51,7 +51,7 @@ func (rest *TestPlannerBacklogREST) SetupTest() {
 	// create a test identity
 	testIdentity, err := testsupport.CreateTestIdentity(rest.DB, "TestPlannerBacklogREST user", "test provider")
 	require.Nil(rest.T(), err)
-	rest.testIdentity = testIdentity
+	rest.testIdentity = *testIdentity
 }
 
 func (rest *TestPlannerBacklogREST) TearDownTest() {
@@ -67,7 +67,8 @@ func (rest *TestPlannerBacklogREST) setupPlannerBacklogWorkItems() (testSpace *s
 	application.Transactional(gormapplication.NewGormDB(rest.DB), func(app application.Application) error {
 		spacesRepo := app.Spaces()
 		testSpace = &space.Space{
-			Name: "PlannerBacklogWorkItems-" + uuid.NewV4().String(),
+			Name:    "PlannerBacklogWorkItems-" + uuid.NewV4().String(),
+			OwnerId: rest.testIdentity.ID,
 		}
 		_, err := spacesRepo.Create(rest.ctx, testSpace)
 		require.Nil(rest.T(), err)
@@ -145,7 +146,8 @@ func (rest *TestPlannerBacklogREST) TestCountZeroPlannerBacklogWorkItemsOK() {
 	application.Transactional(gormapplication.NewGormDB(rest.DB), func(app application.Application) error {
 		spacesRepo := app.Spaces()
 		spaceCount = &space.Space{
-			Name: "PlannerBacklogWorkItems-" + uuid.NewV4().String(),
+			Name:    "PlannerBacklogWorkItems-" + uuid.NewV4().String(),
+			OwnerId: rest.testIdentity.ID,
 		}
 		_, err := spacesRepo.Create(rest.ctx, spaceCount)
 		require.Nil(rest.T(), err)

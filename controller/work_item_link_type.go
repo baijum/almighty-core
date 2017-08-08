@@ -3,13 +3,13 @@ package controller
 import (
 	"fmt"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/errors"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/rest"
-	"github.com/almighty/almighty-core/workitem/link"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/rest"
+	"github.com/fabric8-services/fabric8-wit/workitem/link"
 
 	"github.com/goadesign/goa"
 	uuid "github.com/satori/go.uuid"
@@ -29,9 +29,6 @@ type WorkItemLinkTypeControllerConfiguration interface {
 
 // NewWorkItemLinkTypeController creates a work-item-link-type controller.
 func NewWorkItemLinkTypeController(service *goa.Service, db application.DB, config WorkItemLinkTypeControllerConfiguration) *WorkItemLinkTypeController {
-	if db == nil {
-		panic("db must not be nil")
-	}
 	return &WorkItemLinkTypeController{
 		Controller: service.NewController("WorkItemLinkTypeController"),
 		db:         db,
@@ -42,9 +39,10 @@ func NewWorkItemLinkTypeController(service *goa.Service, db application.DB, conf
 // enrichLinkTypeSingle includes related resources in the single's "included" array
 func enrichLinkTypeSingle(ctx *workItemLinkContext, single *app.WorkItemLinkTypeSingle) error {
 	// Add "links" element
-	selfURL := rest.AbsoluteURL(ctx.RequestData, ctx.LinkFunc(*single.Data.ID))
+	relatedURL := rest.AbsoluteURL(ctx.RequestData, ctx.LinkFunc(*single.Data.ID))
 	single.Data.Links = &app.GenericLinks{
-		Self: &selfURL,
+		Self:    &relatedURL,
+		Related: &relatedURL,
 	}
 
 	// Now include the optional link category data in the work item link type "included" array
@@ -52,7 +50,7 @@ func enrichLinkTypeSingle(ctx *workItemLinkContext, single *app.WorkItemLinkType
 	if err != nil {
 		return err
 	}
-	appCategory := convertLinkCategoryFromModel(*modelCategory)
+	appCategory := ConvertLinkCategoryFromModel(*modelCategory)
 	single.Included = append(single.Included, appCategory.Data)
 
 	// Now include the optional link space data in the work item link type "included" array
@@ -77,9 +75,10 @@ func enrichLinkTypeSingle(ctx *workItemLinkContext, single *app.WorkItemLinkType
 func enrichLinkTypeList(ctx *workItemLinkContext, list *app.WorkItemLinkTypeList) error {
 	// Add "links" element
 	for _, data := range list.Data {
-		selfURL := rest.AbsoluteURL(ctx.RequestData, ctx.LinkFunc(*data.ID))
+		relatedURL := rest.AbsoluteURL(ctx.RequestData, ctx.LinkFunc(*data.ID))
 		data.Links = &app.GenericLinks{
-			Self: &selfURL,
+			Self:    &relatedURL,
+			Related: &relatedURL,
 		}
 	}
 	// Build our "set" of distinct category IDs already converted as strings
@@ -93,7 +92,7 @@ func enrichLinkTypeList(ctx *workItemLinkContext, list *app.WorkItemLinkTypeList
 		if err != nil {
 			return err
 		}
-		appCategory := convertLinkCategoryFromModel(*modelCategory)
+		appCategory := ConvertLinkCategoryFromModel(*modelCategory)
 		list.Included = append(list.Included, appCategory.Data)
 	}
 
@@ -122,6 +121,10 @@ func enrichLinkTypeList(ctx *workItemLinkContext, list *app.WorkItemLinkTypeList
 
 // Create runs the create action.
 func (c *WorkItemLinkTypeController) Create(ctx *app.CreateWorkItemLinkTypeContext) error {
+	// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
+	if true {
+		return ctx.MethodNotAllowed()
+	}
 	// WorkItemLinkTypeController_Create: start_implement
 	// Convert payload from app to model representation
 	appLinkType := app.WorkItemLinkTypeSingle{
@@ -165,6 +168,10 @@ func (c *WorkItemLinkTypeController) Create(ctx *app.CreateWorkItemLinkTypeConte
 
 // Delete runs the delete action.
 func (c *WorkItemLinkTypeController) Delete(ctx *app.DeleteWorkItemLinkTypeContext) error {
+	// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
+	if true {
+		return ctx.MethodNotAllowed()
+	}
 	// WorkItemLinkTypeController_Delete: start_implement
 	return application.Transactional(c.db, func(appl application.Application) error {
 		err := appl.WorkItemLinkTypes().Delete(ctx.Context, ctx.SpaceID, ctx.WiltID)
@@ -218,7 +225,7 @@ func (c *WorkItemLinkTypeController) Show(ctx *app.ShowWorkItemLinkTypeContext) 
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, err)
 		}
-		return ctx.ConditionalEntity(*modelLinkType, c.config.GetCacheControlWorkItemLinkTypes, func() error {
+		return ctx.ConditionalRequest(*modelLinkType, c.config.GetCacheControlWorkItemLinkTypes, func() error {
 			// Convert the created link type entry into a rest representation
 			appLinkType := ConvertWorkItemLinkTypeFromModel(ctx.RequestData, *modelLinkType)
 
@@ -239,6 +246,10 @@ func (c *WorkItemLinkTypeController) Show(ctx *app.ShowWorkItemLinkTypeContext) 
 
 // Update runs the update action.
 func (c *WorkItemLinkTypeController) Update(ctx *app.UpdateWorkItemLinkTypeContext) error {
+	// Currently not used. Disabled as part of https://github.com/fabric8-services/fabric8-wit/issues/1299
+	if true {
+		return ctx.MethodNotAllowed()
+	}
 	currentUserIdentityID, err := login.ContextIdentity(ctx)
 	if err != nil {
 		return jsonapi.JSONErrorResponse(ctx, errors.NewUnauthorizedError(err.Error()))
@@ -277,10 +288,8 @@ func (c *WorkItemLinkTypeController) Update(ctx *app.UpdateWorkItemLinkTypeConte
 
 // ConvertWorkItemLinkTypeFromModel converts a work item link type from model to REST representation
 func ConvertWorkItemLinkTypeFromModel(request *goa.RequestData, modelLinkType link.WorkItemLinkType) app.WorkItemLinkTypeSingle {
-	spaceSelfURL := rest.AbsoluteURL(request, app.SpaceHref(modelLinkType.SpaceID.String()))
-	witTargetSelfURL := rest.AbsoluteURL(request, app.WorkitemtypeHref(modelLinkType.SpaceID.String(), modelLinkType.SourceTypeID.String()))
-	witSourceSelfURL := rest.AbsoluteURL(request, app.WorkitemtypeHref(modelLinkType.SpaceID.String(), modelLinkType.SourceTypeID.String()))
-	linkCategorySelfURL := rest.AbsoluteURL(request, app.WorkItemLinkCategoryHref(modelLinkType.LinkCategoryID.String()))
+	spaceRelatedURL := rest.AbsoluteURL(request, app.SpaceHref(modelLinkType.SpaceID.String()))
+	linkCategoryRelatedURL := rest.AbsoluteURL(request, app.WorkItemLinkCategoryHref(modelLinkType.LinkCategoryID.String()))
 
 	var converted = app.WorkItemLinkTypeSingle{
 		Data: &app.WorkItemLinkTypeData{
@@ -303,28 +312,11 @@ func ConvertWorkItemLinkTypeFromModel(request *goa.RequestData, modelLinkType li
 						ID:   modelLinkType.LinkCategoryID,
 					},
 					Links: &app.GenericLinks{
-						Self: &linkCategorySelfURL,
+						Self:    &linkCategoryRelatedURL,
+						Related: &linkCategoryRelatedURL,
 					},
 				},
-				SourceType: &app.RelationWorkItemType{
-					Data: &app.RelationWorkItemTypeData{
-						Type: link.EndpointWorkItemTypes,
-						ID:   modelLinkType.SourceTypeID,
-					},
-					Links: &app.GenericLinks{
-						Self: &witSourceSelfURL,
-					},
-				},
-				TargetType: &app.RelationWorkItemType{
-					Data: &app.RelationWorkItemTypeData{
-						Type: link.EndpointWorkItemTypes,
-						ID:   modelLinkType.TargetTypeID,
-					},
-					Links: &app.GenericLinks{
-						Self: &witTargetSelfURL,
-					},
-				},
-				Space: app.NewSpaceRelation(modelLinkType.SpaceID, spaceSelfURL),
+				Space: app.NewSpaceRelation(modelLinkType.SpaceID, spaceRelatedURL),
 			},
 		},
 	}
@@ -395,12 +387,6 @@ func ConvertWorkItemLinkTypeToModel(appLinkType app.WorkItemLinkTypeSingle) (*li
 
 	if rel != nil && rel.LinkCategory != nil && rel.LinkCategory.Data != nil {
 		modelLinkType.LinkCategoryID = rel.LinkCategory.Data.ID
-	}
-	if rel != nil && rel.SourceType != nil && rel.SourceType.Data != nil {
-		modelLinkType.SourceTypeID = rel.SourceType.Data.ID
-	}
-	if rel != nil && rel.TargetType != nil && rel.TargetType.Data != nil {
-		modelLinkType.TargetTypeID = rel.TargetType.Data.ID
 	}
 	if rel != nil && rel.Space != nil && rel.Space.Data != nil {
 		modelLinkType.SpaceID = *rel.Space.Data.ID

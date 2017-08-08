@@ -1,16 +1,19 @@
 package application
 
 import (
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/criteria"
-	"github.com/almighty/almighty-core/workitem"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/criteria"
+	"github.com/fabric8-services/fabric8-wit/workitem"
+
+	"context"
 
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/net/context"
 )
 
 // TrackerRepository encapsulate storage & retrieval of tracker configuration
 type TrackerRepository interface {
+	repository.Exister
 	Load(ctx context.Context, ID string) (*app.Tracker, error)
 	Save(ctx context.Context, t app.Tracker) (*app.Tracker, error)
 	Delete(ctx context.Context, ID string) error
@@ -20,6 +23,7 @@ type TrackerRepository interface {
 
 // TrackerQueryRepository encapsulate storage & retrieval of tracker queries
 type TrackerQueryRepository interface {
+	repository.Exister
 	Create(ctx context.Context, query string, schedule string, tracker string, spaceID uuid.UUID) (*app.TrackerQuery, error)
 	Save(ctx context.Context, tq app.TrackerQuery) (*app.TrackerQuery, error)
 	Load(ctx context.Context, ID string) (*app.TrackerQuery, error)
@@ -30,4 +34,5 @@ type TrackerQueryRepository interface {
 // SearchRepository encapsulates searching of woritems,users,etc
 type SearchRepository interface {
 	SearchFullText(ctx context.Context, searchStr string, start *int, length *int, spaceID *string) ([]workitem.WorkItem, uint64, error)
+	Filter(ctx context.Context, filterStr string, parentExists *bool, start *int, length *int) ([]workitem.WorkItem, uint64, error)
 }

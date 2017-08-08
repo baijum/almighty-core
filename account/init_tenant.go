@@ -3,12 +3,12 @@ package account
 import (
 	"net/http"
 
-	"golang.org/x/net/context"
+	"context"
 
 	"net/url"
 
-	"github.com/almighty/almighty-core/account/tenant"
-	"github.com/almighty/almighty-core/goasupport"
+	"github.com/fabric8-services/fabric8-wit/account/tenant"
+	"github.com/fabric8-services/fabric8-wit/goasupport"
 	goaclient "github.com/goadesign/goa/client"
 )
 
@@ -44,11 +44,9 @@ func InitTenant(ctx context.Context, config tenantConfig) error {
 	c.SetJWTSigner(goasupport.NewForwardSigner(ctx))
 
 	// Ignore response for now
-	_, err = c.SetupTenant(ctx, tenant.SetupTenantPath())
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err = c.SetupTenant(goasupport.ForwardContextRequestID(ctx), tenant.SetupTenantPath())
+
+	return err
 }
 
 // UpdateTenant creates a new tenant service in oso
@@ -65,9 +63,7 @@ func UpdateTenant(ctx context.Context, config tenantConfig) error {
 	c.SetJWTSigner(goasupport.NewForwardSigner(ctx))
 
 	// Ignore response for now
-	_, err = c.UpdateTenant(ctx, tenant.SetupTenantPath())
-	if err != nil {
-		return err
-	}
-	return nil
+	_, err = c.UpdateTenant(goasupport.ForwardContextRequestID(ctx), tenant.SetupTenantPath())
+
+	return err
 }

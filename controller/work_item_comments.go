@@ -1,47 +1,62 @@
 package controller
 
 import (
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/application"
-	"github.com/almighty/almighty-core/comment"
-	"github.com/almighty/almighty-core/jsonapi"
-	"github.com/almighty/almighty-core/login"
-	"github.com/almighty/almighty-core/rendering"
-	"github.com/almighty/almighty-core/rest"
-	"github.com/almighty/almighty-core/workitem"
+	"context"
+
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application"
+	"github.com/fabric8-services/fabric8-wit/comment"
+	"github.com/fabric8-services/fabric8-wit/jsonapi"
+	"github.com/fabric8-services/fabric8-wit/login"
+	"github.com/fabric8-services/fabric8-wit/notification"
+	"github.com/fabric8-services/fabric8-wit/rendering"
+	"github.com/fabric8-services/fabric8-wit/rest"
+	"github.com/fabric8-services/fabric8-wit/workitem"
 	"github.com/goadesign/goa"
-	"github.com/pkg/errors"
-	"golang.org/x/net/context"
+	errs "github.com/pkg/errors"
+	uuid "github.com/satori/go.uuid"
 )
 
 // WorkItemCommentsController implements the work-item-comments resource.
 type WorkItemCommentsController struct {
 	*goa.Controller
-	db     application.DB
-	config WorkItemCommentsControllerConfiguration
+	db           application.DB
+	notification notification.Channel
+	config       WorkItemCommentsControllerConfiguration
 }
 
+//WorkItemCommentsControllerConfiguration configuration for the WorkItemCommentsController
 type WorkItemCommentsControllerConfiguration interface {
 	GetCacheControlComments() string
 }
 
 // NewWorkItemCommentsController creates a work-item-relationships-comments controller.
 func NewWorkItemCommentsController(service *goa.Service, db application.DB, config WorkItemCommentsControllerConfiguration) *WorkItemCommentsController {
+	return NewNotifyingWorkItemCommentsController(service, db, &notification.DevNullChannel{}, config)
+}
+
+// NewNotifyingWorkItemCommentsController creates a work-item-relationships-comments controller.
+func NewNotifyingWorkItemCommentsController(service *goa.Service, db application.DB, notificationChannel notification.Channel, config WorkItemCommentsControllerConfiguration) *WorkItemCommentsController {
+	n := notificationChannel
+	if n == nil {
+		n = &notification.DevNullChannel{}
+	}
 	return &WorkItemCommentsController{
-		Controller: service.NewController("WorkItemRelationshipsCommentsController"),
-		db:         db,
-		config:     config,
+		Controller:   service.NewController("WorkItemRelationshipsCommentsController"),
+		db:           db,
+		notification: n,
+		config:       config,
 	}
 }
 
 // Create runs the create action.
 func (c *WorkItemCommentsController) Create(ctx *app.CreateWorkItemCommentsContext) error {
-	return application.Transactional(c.db, func(appl application.Application) error {
+	var newComment comment.Comment
+	result := application.Transactional(c.db, func(appl application.Application) error {
 		_, err := appl.WorkItems().LoadByID(ctx, ctx.WiID)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, goa.ErrNotFound(err.Error()))
 		}
-
 		currentUserIdentityID, err := login.ContextIdentity(ctx)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, goa.ErrUnauthorized(err.Error()))
@@ -49,11 +64,11 @@ func (c *WorkItemCommentsController) Create(ctx *app.CreateWorkItemCommentsConte
 
 		reqComment := ctx.Payload.Data
 		markup := rendering.NilSafeGetMarkup(reqComment.Attributes.Markup)
-		newComment := comment.Comment{
-			ParentID:  ctx.WiID,
-			Body:      reqComment.Attributes.Body,
-			Markup:    markup,
-			CreatedBy: *currentUserIdentityID,
+		newComment = comment.Comment{
+			ParentID: ctx.WiID,
+			Body:     reqComment.Attributes.Body,
+			Markup:   markup,
+			Creator:  *currentUserIdentityID,
 		}
 
 		err = appl.Comments().Create(ctx, &newComment, *currentUserIdentityID)
@@ -66,17 +81,21 @@ func (c *WorkItemCommentsController) Create(ctx *app.CreateWorkItemCommentsConte
 		}
 		return ctx.OK(res)
 	})
+	if ctx.ResponseData.Status == 200 {
+		c.notification.Send(ctx, notification.NewCommentCreated(newComment.ID.String()))
+	}
+	return result
 }
 
 // List runs the list action.
 func (c *WorkItemCommentsController) List(ctx *app.ListWorkItemCommentsContext) error {
 	offset, limit := computePagingLimits(ctx.PageOffset, ctx.PageLimit)
 	return application.Transactional(c.db, func(appl application.Application) error {
-		_, err := appl.WorkItems().LoadByID(ctx, ctx.WiID)
+		wi, err := appl.WorkItems().LoadByID(ctx, ctx.WiID)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, goa.ErrNotFound(err.Error()))
 		}
-		comments, tc, err := appl.Comments().List(ctx, ctx.WiID, &offset, &limit)
+		comments, tc, err := appl.Comments().List(ctx, wi.ID, &offset, &limit)
 		count := int(tc)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, goa.ErrInternal(err.Error()))
@@ -102,8 +121,7 @@ func (c *WorkItemCommentsController) Relations(ctx *app.RelationsWorkItemComment
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, goa.ErrNotFound(err.Error()))
 		}
-
-		comments, tc, err := appl.Comments().List(ctx, ctx.WiID, &offset, &limit)
+		comments, tc, err := appl.Comments().List(ctx, wi.ID, &offset, &limit)
 		count := int(tc)
 		if err != nil {
 			return jsonapi.JSONErrorResponse(ctx, goa.ErrInternal(err.Error()))
@@ -114,13 +132,12 @@ func (c *WorkItemCommentsController) Relations(ctx *app.RelationsWorkItemComment
 		res.Meta = &app.CommentListMeta{TotalCount: count}
 		res.Data = ConvertCommentsResourceID(ctx.RequestData, comments)
 		res.Links = CreateCommentsRelationLinks(ctx.RequestData, wi)
-
 		return ctx.OK(res)
 	})
 }
 
 // workItemIncludeCommentsAndTotal adds relationship about comments to workitem (include totalCount)
-func workItemIncludeCommentsAndTotal(ctx context.Context, db application.DB, parentID string) WorkItemConvertFunc {
+func workItemIncludeCommentsAndTotal(ctx context.Context, db application.DB, parentID uuid.UUID) WorkItemConvertFunc {
 	// TODO: Wrap ctx in a Timeout context?
 	count := make(chan int)
 	go func() {
@@ -129,7 +146,7 @@ func workItemIncludeCommentsAndTotal(ctx context.Context, db application.DB, par
 			cs, err := appl.Comments().Count(ctx, parentID)
 			if err != nil {
 				count <- 0
-				return errors.WithStack(err)
+				return errs.WithStack(err)
 			}
 			count <- cs
 			return nil
@@ -157,8 +174,8 @@ func CreateCommentsRelation(request *goa.RequestData, wi *workitem.WorkItem) *ap
 
 // CreateCommentsRelationLinks returns a RelationGeneric object representing the links for a workitem to comment relation
 func CreateCommentsRelationLinks(request *goa.RequestData, wi *workitem.WorkItem) *app.GenericLinks {
-	commentsSelf := rest.AbsoluteURL(request, app.WorkitemHref(wi.SpaceID, wi.ID)) + "/relationships/comments"
-	commentsRelated := rest.AbsoluteURL(request, app.WorkitemHref(wi.SpaceID, wi.ID)) + "/comments"
+	commentsSelf := rest.AbsoluteURL(request, app.WorkitemHref(wi.ID)) + "/relationships/comments"
+	commentsRelated := rest.AbsoluteURL(request, app.WorkitemHref(wi.ID)) + "/comments"
 	return &app.GenericLinks{
 		Self:    &commentsSelf,
 		Related: &commentsRelated,

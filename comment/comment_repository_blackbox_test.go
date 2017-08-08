@@ -4,16 +4,17 @@ import (
 	"testing"
 	"time"
 
-	"golang.org/x/net/context"
+	"context"
 
-	"github.com/almighty/almighty-core/account"
-	"github.com/almighty/almighty-core/comment"
-	"github.com/almighty/almighty-core/gormsupport/cleaner"
-	"github.com/almighty/almighty-core/gormtestsupport"
-	"github.com/almighty/almighty-core/migration"
-	"github.com/almighty/almighty-core/rendering"
-	"github.com/almighty/almighty-core/resource"
-	testsupport "github.com/almighty/almighty-core/test"
+	"github.com/fabric8-services/fabric8-wit/account"
+	"github.com/fabric8-services/fabric8-wit/comment"
+	"github.com/fabric8-services/fabric8-wit/errors"
+	"github.com/fabric8-services/fabric8-wit/gormsupport/cleaner"
+	"github.com/fabric8-services/fabric8-wit/gormtestsupport"
+	"github.com/fabric8-services/fabric8-wit/migration"
+	"github.com/fabric8-services/fabric8-wit/rendering"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	testsupport "github.com/fabric8-services/fabric8-wit/test"
 
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/assert"
@@ -48,19 +49,19 @@ func (s *TestCommentRepository) SetupTest() {
 	s.repo = comment.NewRepository(s.DB)
 	testIdentity, err := testsupport.CreateTestIdentity(s.DB, "jdoe", "test")
 	require.Nil(s.T(), err)
-	s.testIdentity = testIdentity
+	s.testIdentity = *testIdentity
 }
 
 func (s *TestCommentRepository) TearDownTest() {
 	s.clean()
 }
 
-func newComment(parentID, body, markup string) *comment.Comment {
+func newComment(parentID uuid.UUID, body, markup string) *comment.Comment {
 	return &comment.Comment{
-		ParentID:  parentID,
-		Body:      body,
-		Markup:    markup,
-		CreatedBy: uuid.NewV4(),
+		ParentID: parentID,
+		Body:     body,
+		Markup:   markup,
+		Creator:  uuid.NewV4(),
 	}
 }
 
@@ -77,7 +78,7 @@ func (s *TestCommentRepository) createComments(comments []*comment.Comment, crea
 
 func (s *TestCommentRepository) TestCreateCommentWithMarkup() {
 	// given
-	comment := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
+	comment := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupMarkdown)
 	// when
 	s.repo.Create(s.ctx, comment, s.testIdentity.ID)
 	// then
@@ -88,7 +89,7 @@ func (s *TestCommentRepository) TestCreateCommentWithMarkup() {
 
 func (s *TestCommentRepository) TestCreateCommentWithoutMarkup() {
 	// given
-	comment := newComment("A", "Test A", "")
+	comment := newComment(uuid.NewV4(), "Test A", "")
 	// when
 	s.repo.Create(s.ctx, comment, s.testIdentity.ID)
 	// then
@@ -100,7 +101,7 @@ func (s *TestCommentRepository) TestCreateCommentWithoutMarkup() {
 
 func (s *TestCommentRepository) TestSaveCommentWithMarkup() {
 	// given
-	comment := newComment("A", "Test A", rendering.SystemMarkupPlainText)
+	comment := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupPlainText)
 	s.createComment(comment, s.testIdentity.ID)
 	assert.NotNil(s.T(), comment.ID, "Comment was not created, ID nil")
 	// when
@@ -119,7 +120,7 @@ func (s *TestCommentRepository) TestSaveCommentWithMarkup() {
 
 func (s *TestCommentRepository) TestSaveCommentWithoutMarkup() {
 	// given
-	comment := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
+	comment := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupMarkdown)
 	s.createComment(comment, s.testIdentity.ID)
 	assert.NotNil(s.T(), comment.ID, "Comment was not created, ID nil")
 	// when
@@ -138,12 +139,12 @@ func (s *TestCommentRepository) TestSaveCommentWithoutMarkup() {
 
 func (s *TestCommentRepository) TestDeleteComment() {
 	// given
-	parentID := "AA"
+	parentID := uuid.NewV4()
 	c := &comment.Comment{
-		ParentID:  parentID,
-		Body:      "Test AA",
-		CreatedBy: uuid.NewV4(),
-		ID:        uuid.NewV4(),
+		ParentID: parentID,
+		Body:     "Test AA",
+		Creator:  uuid.NewV4(),
+		ID:       uuid.NewV4(),
 	}
 	s.repo.Create(s.ctx, c, s.testIdentity.ID)
 	require.NotEqual(s.T(), uuid.Nil, c.ID)
@@ -155,9 +156,9 @@ func (s *TestCommentRepository) TestDeleteComment() {
 
 func (s *TestCommentRepository) TestCountComments() {
 	// given
-	parentID := "A"
-	comment1 := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
-	comment2 := newComment("B", "Test B", rendering.SystemMarkupMarkdown)
+	parentID := uuid.NewV4()
+	comment1 := newComment(parentID, "Test A", rendering.SystemMarkupMarkdown)
+	comment2 := newComment(uuid.NewV4(), "Test B", rendering.SystemMarkupMarkdown)
 	comments := []*comment.Comment{comment1, comment2}
 	s.createComments(comments, s.testIdentity.ID)
 	// when
@@ -169,8 +170,8 @@ func (s *TestCommentRepository) TestCountComments() {
 
 func (s *TestCommentRepository) TestListComments() {
 	// given
-	comment1 := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
-	comment2 := newComment("B", "Test B", rendering.SystemMarkupMarkdown)
+	comment1 := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupMarkdown)
+	comment2 := newComment(uuid.NewV4(), "Test B", rendering.SystemMarkupMarkdown)
 	createdComments := []*comment.Comment{comment1, comment2}
 	s.createComments(createdComments, s.testIdentity.ID)
 	// when
@@ -185,8 +186,8 @@ func (s *TestCommentRepository) TestListComments() {
 
 func (s *TestCommentRepository) TestListCommentsWrongOffset() {
 	// given
-	comment1 := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
-	comment2 := newComment("B", "Test B", rendering.SystemMarkupMarkdown)
+	comment1 := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupMarkdown)
+	comment2 := newComment(uuid.NewV4(), "Test B", rendering.SystemMarkupMarkdown)
 	comments := []*comment.Comment{comment1, comment2}
 	s.createComments(comments, s.testIdentity.ID)
 	// when
@@ -199,8 +200,8 @@ func (s *TestCommentRepository) TestListCommentsWrongOffset() {
 
 func (s *TestCommentRepository) TestListCommentsWrongLimit() {
 	// given
-	comment1 := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
-	comment2 := newComment("B", "Test B", rendering.SystemMarkupMarkdown)
+	comment1 := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupMarkdown)
+	comment2 := newComment(uuid.NewV4(), "Test B", rendering.SystemMarkupMarkdown)
 	comments := []*comment.Comment{comment1, comment2}
 	s.createComments(comments, s.testIdentity.ID)
 	// when
@@ -213,7 +214,7 @@ func (s *TestCommentRepository) TestListCommentsWrongLimit() {
 
 func (s *TestCommentRepository) TestLoadComment() {
 	// given
-	comment := newComment("A", "Test A", rendering.SystemMarkupMarkdown)
+	comment := newComment(uuid.NewV4(), "Test A", rendering.SystemMarkupMarkdown)
 	s.createComment(comment, s.testIdentity.ID)
 	// when
 	loadedComment, err := s.repo.Load(s.ctx, comment.ID)
@@ -221,4 +222,28 @@ func (s *TestCommentRepository) TestLoadComment() {
 	require.Nil(s.T(), err)
 	assert.Equal(s.T(), comment.ID, loadedComment.ID)
 	assert.Equal(s.T(), comment.Body, loadedComment.Body)
+}
+
+func (s *TestCommentRepository) TestExistsComment() {
+	t := s.T()
+	resource.Require(t, resource.Database)
+
+	t.Run("comment exists", func(t *testing.T) {
+		// given
+		comment := newComment(uuid.NewV4(), "Test C", rendering.SystemMarkupMarkdown)
+		s.createComment(comment, s.testIdentity.ID)
+		// when
+		err := s.repo.CheckExists(s.ctx, comment.ID.String())
+		// then
+		require.Nil(t, err)
+	})
+
+	t.Run("comment doesn't exist", func(t *testing.T) {
+		// when
+		err := s.repo.CheckExists(s.ctx, uuid.NewV4().String())
+		// then
+
+		require.IsType(t, errors.NotFoundError{}, err)
+	})
+
 }

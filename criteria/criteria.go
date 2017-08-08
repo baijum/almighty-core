@@ -35,12 +35,18 @@ type BinaryExpression interface {
 	Right() Expression
 }
 
+// InTableExpression represents expression creates an IN query
+type InTableExpression interface {
+	Expression
+}
+
 // ExpressionVisitor is an implementation of the visitor pattern for expressions
 type ExpressionVisitor interface {
 	Field(t *FieldExpression) interface{}
 	And(a *AndExpression) interface{}
 	Or(a *OrExpression) interface{}
 	Equals(e *EqualsExpression) interface{}
+	In(e *InExpression) interface{}
 	Parameter(v *ParameterExpression) interface{}
 	Literal(c *LiteralExpression) interface{}
 	Not(e *NotExpression) interface{}
@@ -191,6 +197,16 @@ type EqualsExpression struct {
 	binaryExpression
 }
 
+// InExpression represents the equality operator
+type InExpression struct {
+	binaryExpression
+}
+
+// Accept implements ExpressionVisitor
+func (k *InExpression) Accept(visitor ExpressionVisitor) interface{} {
+	return visitor.In(k)
+}
+
 // Accept implements ExpressionVisitor
 func (t *EqualsExpression) Accept(visitor ExpressionVisitor) interface{} {
 	return visitor.Equals(t)
@@ -199,6 +215,11 @@ func (t *EqualsExpression) Accept(visitor ExpressionVisitor) interface{} {
 // Equals constructs an EqualsExpression
 func Equals(left Expression, right Expression) Expression {
 	return reparent(&EqualsExpression{binaryExpression{expression{}, left, right}})
+}
+
+// In constructs an InExpression
+func In(outer Expression, inner Expression) Expression {
+	return reparent(&InExpression{binaryExpression{expression{}, outer, inner}})
 }
 
 // IS NULL
@@ -235,3 +256,7 @@ func (t *NotExpression) Accept(visitor ExpressionVisitor) interface{} {
 func Not(left Expression, right Expression) Expression {
 	return reparent(&NotExpression{binaryExpression{expression{}, left, right}})
 }
+
+/* InTable construct a InTableExpression
+func InTable(table, column string, e Expression, substring bool) Expression {
+}*/

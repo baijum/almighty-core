@@ -1,19 +1,22 @@
 package remoteworkitem
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/log"
-	"github.com/almighty/almighty-core/rest"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/application/repository"
+	"github.com/fabric8-services/fabric8-wit/log"
+	"github.com/fabric8-services/fabric8-wit/rest"
 
 	"github.com/goadesign/goa"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
-	"golang.org/x/net/context"
 )
+
+const trackerQueriesTableName = "tracker_queries"
 
 // GormTrackerQueryRepository implements TrackerRepository using gorm
 type GormTrackerQueryRepository struct {
@@ -105,6 +108,11 @@ func (r *GormTrackerQueryRepository) Load(ctx context.Context, ID string) (*app.
 	}
 
 	return &tq, nil
+}
+
+// CheckExists returns nil if the given ID exists otherwise returns an error
+func (r *GormTrackerQueryRepository) CheckExists(ctx context.Context, id string) error {
+	return repository.CheckExists(ctx, r.db, trackerQueriesTableName, id)
 }
 
 // Save updates the given tracker query in storage.

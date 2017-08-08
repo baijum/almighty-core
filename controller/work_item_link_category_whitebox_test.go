@@ -3,9 +3,9 @@ package controller
 import (
 	"testing"
 
-	"github.com/almighty/almighty-core/app"
-	"github.com/almighty/almighty-core/resource"
-	"github.com/almighty/almighty-core/workitem/link"
+	"github.com/fabric8-services/fabric8-wit/app"
+	"github.com/fabric8-services/fabric8-wit/resource"
+	"github.com/fabric8-services/fabric8-wit/workitem/link"
 	uuid "github.com/satori/go.uuid"
 	"github.com/stretchr/testify/require"
 )
@@ -34,7 +34,7 @@ func TestWorkItemLinkCategory_ConvertLinkCategoryFromModel(t *testing.T) {
 		},
 	}
 
-	actual := convertLinkCategoryFromModel(m)
+	actual := ConvertLinkCategoryFromModel(m)
 	require.Equal(t, expected.Data.Type, actual.Data.Type)
 	require.Equal(t, *expected.Data.ID, *actual.Data.ID)
 	require.Equal(t, *expected.Data.Attributes.Name, *actual.Data.Attributes.Name)
