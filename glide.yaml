@@ -112,3 +112,4 @@ import:
 - package: github.com/sergi/go-diff
   subpackages:
   - diffmatchpatch
+- package: github.com/gorilla/websocket

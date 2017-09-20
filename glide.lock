@@ -87,6 +87,8 @@ imports:
   version: 5c45bca952b96dedace6c307caff915483013003
   subpackages:
   - github
+- name: github.com/gorilla/websocket
+  version: 6f34763140ed8887aed6a044912009832b4733d7
 - name: github.com/google/go-querystring
   version: 9235644dd9e52eeae6fa48efd539fdc351a0af53
   subpackages:

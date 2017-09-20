@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"os/user"
@@ -11,7 +12,7 @@ import (
 	"context"
 
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 
 	"github.com/fabric8-services/fabric8-wit/account"
 	"github.com/fabric8-services/fabric8-wit/app"
@@ -40,6 +41,17 @@ import (
 	"github.com/goadesign/goa/middleware/gzip"
 	goajwt "github.com/goadesign/goa/middleware/security/jwt"
 )
+
+func waitForNotification(l *pq.Listener) {
+	for {
+		select {
+		case <-l.Notify:
+			r := <-l.Notify
+			fmt.Printf("aaaaaaaaaaaaaaaaa: received notification, new work available %#v %#v", l.Notify, r.Extra)
+			//controller.RefreshWIClients(r.Extra)
+		}
+	}
+}
 
 func main() {
 	// --------------------------------------------------------------------
@@ -98,6 +110,21 @@ func main() {
 			break
 		}
 	}
+
+	reportListenProblem := func(ev pq.ListenerEventType, err error) {
+		if err != nil {
+			log.Logger().Error(err.Error())
+		}
+	}
+
+	listener := pq.NewListener(config.GetPostgresConfigString(), 10*time.Second, time.Minute, reportListenProblem)
+	err = listener.Listen("wi_update")
+	if err != nil {
+		listener.Close()
+	} else {
+		defer listener.Close()
+	}
+	go waitForNotification(listener)
 
 	if config.IsPostgresDeveloperModeEnabled() && log.IsDebug() {
 		db = db.Debug()
@@ -254,6 +281,10 @@ func main() {
 	// Mount "work item labels relationships" controller
 	workItemLabelCtrl := controller.NewWorkItemLabelsController(service, appDB, config)
 	app.MountWorkItemLabelsController(service, workItemLabelCtrl)
+
+	// Mount "work item refresh" controller
+	workItemRefreshCtrl := controller.NewWorkitemRefreshController(service, appDB, config)
+	app.MountWorkitemRefreshController(service, workItemRefreshCtrl)
 
 	if config.GetFeatureWorkitemRemote() {
 		// Scheduler to fetch and import remote tracker items
