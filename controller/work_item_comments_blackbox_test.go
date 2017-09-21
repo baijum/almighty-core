@@ -92,10 +92,10 @@ func (rest *TestCommentREST) createDefaultWorkItem() *workitem.WorkItem {
 			rest.ctx,
 			space.SystemSpace,
 			workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle: "A",
 				workitem.SystemState: "new",
-			},
+			}},
 			rest.testIdentity.ID)
 		if err != nil {
 			return errors.WithStack(err)

@@ -39,10 +39,10 @@ func (s *BenchWorkItemRepository) SetupBenchmark() {
 func (r *BenchWorkItemRepository) BenchmarkLoadWorkItem() {
 	wi, err := r.repo.Create(
 		r.Ctx, space.SystemSpace, workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle: "Title",
 			workitem.SystemState: workitem.SystemStateNew,
-		}, r.creatorID)
+		}}, r.creatorID)
 	if err != nil {
 		r.B().Fail()
 	}

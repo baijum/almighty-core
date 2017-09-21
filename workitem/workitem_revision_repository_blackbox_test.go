@@ -57,10 +57,10 @@ func (s *workItemRevisionRepositoryBlackBoxTest) TestStoreRevisions() {
 	// create a workitem
 	workItem, err := s.repository.Create(
 		ctx, space.SystemSpace, workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle: "Title",
 			workitem.SystemState: workitem.SystemStateNew,
-		}, s.testIdentity1.ID)
+		}}, s.testIdentity1.ID)
 	require.Nil(s.T(), err)
 	// modify the workitem
 	workItem.Fields[workitem.SystemTitle] = "Updated Title"

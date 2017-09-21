@@ -78,18 +78,18 @@ func (rest *TestPlannerBacklogREST) setupPlannerBacklogWorkItems() (testSpace *s
 		iterationsRepo.Create(rest.Ctx, childIteration)
 		log.Info(nil, map[string]interface{}{"child_iteration_id": childIteration.ID}, "created child iteration")
 
-		fields := map[string]interface{}{
+		fields := workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:     "parentIteration Test",
 			workitem.SystemState:     "new",
 			workitem.SystemIteration: parentIteration.ID.String(),
-		}
+		}}
 		app.WorkItems().Create(rest.Ctx, testSpace.ID, workitemType.ID, fields, rest.testIdentity.ID)
 
-		fields2 := map[string]interface{}{
+		fields2 := workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:     "childIteration Test",
 			workitem.SystemState:     "closed",
 			workitem.SystemIteration: childIteration.ID.String(),
-		}
+		}}
 		createdWI, err = app.WorkItems().Create(rest.Ctx, testSpace.ID, workitemType.ID, fields2, rest.testIdentity.ID)
 		require.Nil(rest.T(), err)
 		return nil

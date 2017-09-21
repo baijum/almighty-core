@@ -78,12 +78,12 @@ func (s *searchBlackBoxTest) TestSearchWorkItems() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch",
 			workitem.SystemDescription: nil,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -102,12 +102,12 @@ func (s *searchBlackBoxTest) TestSearchPagination() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch2",
 			workitem.SystemDescription: nil,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -128,12 +128,12 @@ func (s *searchBlackBoxTest) TestSearchWithEmptyValue() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch",
 			workitem.SystemDescription: nil,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -153,11 +153,11 @@ func (s *searchBlackBoxTest) TestSearchWithDomainPortCombination() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch_new",
 			workitem.SystemDescription: expectedDescription,
 			workitem.SystemCreator:     "baijum", workitem.SystemState: workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -177,12 +177,12 @@ func (s *searchBlackBoxTest) TestSearchURLWithoutPort() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch_without_port",
 			workitem.SystemDescription: expectedDescription,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -202,12 +202,12 @@ func (s *searchBlackBoxTest) TestUnregisteredURLWithPort() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch_new",
 			workitem.SystemDescription: expectedDescription,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -227,12 +227,12 @@ func (s *searchBlackBoxTest) TestUnwantedCharactersRelatedToSearchLogic() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch_new",
 			workitem.SystemDescription: expectedDescription,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when
@@ -371,12 +371,12 @@ func (s *searchBlackBoxTest) TestSearchWorkItemsSpaceContext() {
 			s.Ctx,
 			space1.ID,
 			workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle:       "shutter_island common_word random - " + uuid.NewV4().String(),
 				workitem.SystemDescription: nil,
 				workitem.SystemCreator:     "pranav",
 				workitem.SystemState:       workitem.SystemStateClosed,
-			},
+			}},
 			s.testIdentity.ID)
 		require.Nil(s.T(), err)
 		require.NotNil(s.T(), wi)
@@ -387,12 +387,12 @@ func (s *searchBlackBoxTest) TestSearchWorkItemsSpaceContext() {
 			s.Ctx,
 			space2.ID,
 			workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle:       "inception common_word random - " + uuid.NewV4().String(),
 				workitem.SystemDescription: nil,
 				workitem.SystemCreator:     "pranav",
 				workitem.SystemState:       workitem.SystemStateClosed,
-			},
+			}},
 			s.testIdentity.ID)
 		require.Nil(s.T(), err)
 		require.NotNil(s.T(), wi)
@@ -456,12 +456,12 @@ func (s *searchBlackBoxTest) TestSearchWorkItemsWithoutSpaceContext() {
 			s.Ctx,
 			space1.ID,
 			workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle:       "search_by_me random - " + uuid.NewV4().String(),
 				workitem.SystemDescription: nil,
 				workitem.SystemCreator:     "pranav",
 				workitem.SystemState:       workitem.SystemStateClosed,
-			},
+			}},
 			s.testIdentity.ID)
 		require.Nil(s.T(), err)
 		require.NotNil(s.T(), wi)
@@ -472,12 +472,12 @@ func (s *searchBlackBoxTest) TestSearchWorkItemsWithoutSpaceContext() {
 			s.Ctx,
 			space2.ID,
 			workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle:       "search_by_me random - " + uuid.NewV4().String(),
 				workitem.SystemDescription: nil,
 				workitem.SystemCreator:     "pranav",
 				workitem.SystemState:       workitem.SystemStateClosed,
-			},
+			}},
 			s.testIdentity.ID)
 		require.Nil(s.T(), err)
 		require.NotNil(s.T(), wi)
@@ -495,12 +495,12 @@ func (s *searchBlackBoxTest) TestSearchFilter() {
 		s.Ctx,
 		space.SystemSpace,
 		workitem.SystemBug,
-		map[string]interface{}{
+		workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle:       "specialwordforsearch",
 			workitem.SystemDescription: nil,
 			workitem.SystemCreator:     "baijum",
 			workitem.SystemState:       workitem.SystemStateClosed,
-		},
+		}},
 		s.testIdentity.ID)
 	require.Nil(s.T(), err)
 	// when

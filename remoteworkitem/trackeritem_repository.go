@@ -149,7 +149,7 @@ func upsert(ctx context.Context, db *gorm.DB, workItem workitem.WorkItem) (*work
 		}
 	} else {
 		log.Info(nil, nil, "Workitem does not exist, will be created")
-		resultWorkItem, err = wir.Create(ctx, workItem.SpaceID, workitem.SystemBug, workItem.Fields, creator)
+		resultWorkItem, err = wir.Create(ctx, workItem.SpaceID, workitem.SystemBug, workItem, creator)
 		if err != nil {
 			return nil, errors.WithStack(err)
 		}

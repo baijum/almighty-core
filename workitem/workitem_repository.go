@@ -42,7 +42,7 @@ type WorkItemRepository interface {
 	Save(ctx context.Context, spaceID uuid.UUID, wi WorkItem, modifierID uuid.UUID) (*WorkItem, error)
 	Reorder(ctx context.Context, spaceID uuid.UUID, direction DirectionType, targetID *uuid.UUID, wi WorkItem, modifierID uuid.UUID) (*WorkItem, error)
 	Delete(ctx context.Context, id uuid.UUID, suppressorID uuid.UUID) error
-	Create(ctx context.Context, spaceID uuid.UUID, typeID uuid.UUID, fields map[string]interface{}, creatorID uuid.UUID) (*WorkItem, error)
+	Create(ctx context.Context, spaceID uuid.UUID, typeID uuid.UUID, wi WorkItem, creatorID uuid.UUID) (*WorkItem, error)
 	List(ctx context.Context, spaceID uuid.UUID, criteria criteria.Expression, parentExists *bool, start *int, length *int) ([]WorkItem, int, error)
 	Fetch(ctx context.Context, spaceID uuid.UUID, criteria criteria.Expression) (*WorkItem, error)
 	GetCountsPerIteration(ctx context.Context, spaceID uuid.UUID) (map[string]WICountsPerIteration, error)
@@ -496,7 +496,7 @@ func (r *GormWorkItemRepository) Save(ctx context.Context, spaceID uuid.UUID, up
 
 // Create creates a new work item in the repository
 // returns BadParameterError, ConversionError or InternalError
-func (r *GormWorkItemRepository) Create(ctx context.Context, spaceID uuid.UUID, typeID uuid.UUID, fields map[string]interface{}, creatorID uuid.UUID) (*WorkItem, error) {
+func (r *GormWorkItemRepository) Create(ctx context.Context, spaceID uuid.UUID, typeID uuid.UUID, w WorkItem, creatorID uuid.UUID) (*WorkItem, error) {
 	defer goa.MeasureSince([]string{"goa", "db", "workitem", "create"}, time.Now())
 
 	wiType, err := r.witr.LoadTypeFromDB(ctx, typeID)
@@ -529,12 +529,12 @@ func (r *GormWorkItemRepository) Create(ctx context.Context, spaceID uuid.UUID, 
 		SpaceID:        spaceID,
 		Number:         numberSequence.CurrentVal,
 	}
-	fields[SystemCreator] = creatorID.String()
+	w.Fields[SystemCreator] = creatorID.String()
 	for fieldName, fieldDef := range wiType.Fields {
 		if fieldName == SystemCreatedAt || fieldName == SystemUpdatedAt || fieldName == SystemOrder {
 			continue
 		}
-		fieldValue := fields[fieldName]
+		fieldValue := w.Fields[fieldName]
 		var err error
 		wi.Fields[fieldName], err = fieldDef.ConvertToModel(fieldName, fieldValue)
 		if err != nil {

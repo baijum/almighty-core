@@ -251,10 +251,10 @@ func (rest *TestIterationREST) TestShowIterationNotModifiedUsingIfNoneMatchHeade
 func (rest *TestIterationREST) createWorkItem(parentSpace space.Space) workitem.WorkItem {
 	var wi *workitem.WorkItem
 	err := application.Transactional(gormapplication.NewGormDB(rest.DB), func(app application.Application) error {
-		fields := map[string]interface{}{
+		fields := workitem.WorkItem{Fields: map[string]interface{}{
 			workitem.SystemTitle: "Test Item",
 			workitem.SystemState: "new",
-		}
+		}}
 		w, err := app.WorkItems().Create(context.Background(), parentSpace.ID, workitem.SystemBug, fields, parentSpace.OwnerId)
 		wi = w
 		return err
@@ -446,11 +446,11 @@ func (rest *TestIterationREST) TestSuccessUpdateIterationWithWICounts() {
 	for i := 0; i < 4; i++ {
 		wi, err := wirepo.Create(
 			ctx, itr.SpaceID, workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle:     fmt.Sprintf("New issue #%d", i),
 				workitem.SystemState:     workitem.SystemStateNew,
 				workitem.SystemIteration: itr.ID.String(),
-			}, testIdentity.ID)
+			}}, testIdentity.ID)
 		require.NotNil(rest.T(), wi)
 		require.Nil(rest.T(), err)
 		require.NotNil(rest.T(), wi)
@@ -458,11 +458,11 @@ func (rest *TestIterationREST) TestSuccessUpdateIterationWithWICounts() {
 	for i := 0; i < 5; i++ {
 		wi, err := wirepo.Create(
 			ctx, itr.SpaceID, workitem.SystemBug,
-			map[string]interface{}{
+			workitem.WorkItem{Fields: map[string]interface{}{
 				workitem.SystemTitle:     fmt.Sprintf("Closed issue #%d", i),
 				workitem.SystemState:     workitem.SystemStateClosed,
 				workitem.SystemIteration: itr.ID.String(),
-			}, testIdentity.ID)
+			}}, testIdentity.ID)
 		require.NotNil(rest.T(), wi)
 		require.Nil(rest.T(), err)
 		require.NotNil(rest.T(), wi)
