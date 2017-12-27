@@ -108,7 +108,7 @@ import:
   subpackages:
   - golint
 - package: github.com/fzipp/gocyclo
-- package: github.com/sirupsen/logrus
+- package: github.com/Sirupsen/logrus
 - package: github.com/sourcegraph/syntaxhighlight
 - package: github.com/jstemmer/go-junit-report
 - package: github.com/sourcegraph/annotate
